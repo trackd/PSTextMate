@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Globalization;
 using System.IO;
+using System.Text;
+using System.Collections.Generic;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
 using TextMateSharp.Registry;
 using Spectre.Console;
+
 
 namespace PwshSpectreConsole.SyntaxHighlight;
 public class Highlight
@@ -13,41 +16,39 @@ public class Highlight
     {
         return Enum.Parse<ThemeName>(themeName, true);
     }
-    public static void String(string[] lines, ThemeName themeName, string grammarId)
+    public static Rows[]? String(string[] lines, ThemeName themeName, string grammarId)
     {
         RegistryOptions options = new RegistryOptions(themeName);
         Registry registry = new Registry(options);
         Theme theme = registry.GetTheme();
         IGrammar grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
-        Write(lines, theme, grammar);
+        if (grammar == null)
+        {
+            throw new Exception("Grammar not found.");
+        }
+        return Write(lines, theme, grammar);
     }
-    public static void ReadFile(string fullName, ThemeName themeName, string Extension)
+    public static Rows[]? ReadFile(string fullName, ThemeName themeName, string Extension)
     {
-        try
+        string[] lines = File.ReadAllLines(fullName);
+        RegistryOptions options = new RegistryOptions(themeName);
+        Registry registry = new Registry(options);
+        Theme theme = registry.GetTheme();
+        IGrammar grammar = registry.LoadGrammar(options.GetScopeByExtension(Extension));
+        if (grammar == null)
         {
-            string[] lines = File.ReadAllLines(fullName);
-            RegistryOptions options = new RegistryOptions(themeName);
-            Registry registry = new Registry(options);
-            Theme theme = registry.GetTheme();
-            IGrammar grammar = registry.LoadGrammar(options.GetScopeByExtension(Extension));
-            Write(lines, theme, grammar);
+            throw new Exception("Grammar not found.");
         }
-        catch (Exception ex)
-        {
-            throw new Exception("ERROR: " + ex.Message);
-        }
+        return Write(lines, theme, grammar);
     }
 
-    public static void Write(string[] lines, Theme theme, IGrammar grammar)
+    internal static Rows[]? Write(string[] lines, Theme theme, IGrammar grammar)
     {
+        StringBuilder builder = new StringBuilder();
+        List<Rows> rows = new List<Rows>();
         try
         {
             int ini = Environment.TickCount;
-            if (grammar == null)
-            {
-                throw new Exception("Grammar not found.");
-            }
-
             int tokenizeIni = Environment.TickCount;
             IStateStack? ruleStack = null;
 
@@ -77,32 +78,43 @@ public class Highlight
                             fontStyle = themeRule.fontStyle;
                     }
 
-                    WriteToken(line.SubstringAtIndexes(startIndex, endIndex), foreground, background, fontStyle, theme);
+                    var (textEscaped, style) = WriteToken(line.SubstringAtIndexes(startIndex, endIndex), foreground, background, fontStyle, theme);
+                    if (style == null)
+                    {
+                        builder.Append(textEscaped);
+                    }
+                    else
+                    {
+                        builder.AppendWithStyle(style, textEscaped);
+                    }
                 }
+                var row = new Rows(
+                    new Markup(builder.ToString())
+                );
+                rows.Add(row);
+                builder.Clear();
             }
+            return rows.ToArray();
         }
         catch (Exception ex)
         {
             throw new Exception("ERROR: " + ex.Message);
         }
     }
-    static void WriteToken(string text, int foreground, int background, FontStyle fontStyle, Theme theme)
+    static (string textEscaped, Style? style) WriteToken(string text, int foreground, int background, FontStyle fontStyle, Theme theme)
     {
+        string textEscaped = Markup.Escape(text);
         if (foreground == -1)
         {
-            Console.Write(text);
-            return;
+            return (textEscaped, null);
         }
 
         Decoration decoration = GetDecoration(fontStyle);
-
         Color backgroundColor = GetColor(background, theme);
         Color foregroundColor = GetColor(foreground, theme);
 
         Style style = new Style(foregroundColor, backgroundColor, decoration);
-        Markup markup = new Markup(text.Replace("[", "[[").Replace("]", "]]"), style);
-
-        AnsiConsole.Write(markup);
+        return (textEscaped, style);
     }
 
     static Color GetColor(int colorId, Theme theme)
@@ -134,12 +146,11 @@ public class Highlight
 
     static Color HexToColor(string hexString)
     {
-        //replace # occurences
-        if (hexString.IndexOf('#') != -1)
-            hexString = hexString.Replace("#", "");
+        if (hexString.StartsWith("#")) {
+            hexString = hexString.Substring(1);
+        }
 
         byte r, g, b = 0;
-
         r = byte.Parse(hexString.Substring(0, 2), NumberStyles.AllowHexSpecifier);
         g = byte.Parse(hexString.Substring(2, 2), NumberStyles.AllowHexSpecifier);
         b = byte.Parse(hexString.Substring(4, 2), NumberStyles.AllowHexSpecifier);
@@ -153,5 +164,40 @@ internal static class StringExtensions
     internal static string SubstringAtIndexes(this string str, int startIndex, int endIndex)
     {
         return str.Substring(startIndex, endIndex - startIndex);
+    }
+}
+
+internal static class StringBuilderExtensions
+{
+    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, int? value)
+    {
+        return AppendWithStyle(builder, style, value?.ToString(CultureInfo.InvariantCulture));
+    }
+
+    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, string? value)
+    {
+        value ??= string.Empty;
+
+        if (style != null)
+        {
+            return builder.Append('[')
+            .Append(style.ToMarkup())
+            .Append(']')
+            .Append(value.EscapeMarkup())
+            .Append("[/]");
+        }
+
+        return builder.Append(value);
+    }
+
+    public static void AppendSpan(this StringBuilder builder, ReadOnlySpan<char> span)
+    {
+        // NetStandard 2 lacks the override for StringBuilder to add the span. We'll need to convert the span
+        // to a string for it, but for .NET 6.0 or newer we'll use the override.
+#if NETSTANDARD2_0
+        builder.Append(span.ToString());
+#else
+        builder.Append(span);
+#endif
     }
 }

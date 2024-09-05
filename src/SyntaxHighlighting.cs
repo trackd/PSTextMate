@@ -5,7 +5,6 @@ using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
 using TextMateSharp.Registry;
 using Spectre.Console;
-using System.Linq;
 
 namespace PwshSpectreConsole.SyntaxHighlight;
 public class Highlight
@@ -14,7 +13,7 @@ public class Highlight
     {
         return Enum.Parse<ThemeName>(themeName, true);
     }
-    public static void Code(string[] lines, ThemeName themeName, string grammarId)
+    public static void String(string[] lines, ThemeName themeName, string grammarId)
     {
         RegistryOptions options = new RegistryOptions(themeName);
         Registry registry = new Registry(options);

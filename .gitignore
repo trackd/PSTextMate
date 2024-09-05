@@ -1,0 +1,5 @@
+packages/
+src/bin/*
+src/obj/*
+src/.vs/*
+harness.ps1

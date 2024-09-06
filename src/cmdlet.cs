@@ -2,6 +2,7 @@
 using System.IO;
 using System.Management.Automation;
 using TextMateSharp.Grammars;
+using TextMateSharp.Registry;
 using System.Linq;
 using Spectre.Console;
 
@@ -22,7 +23,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     public string File { get; set; } = null!;
 
     [Parameter(ParameterSetName = "String")]
-    [ValidateSet(nameof(TextMateLanguages), ErrorMessage = "Value '{0}' is invalid. Try one of: {1}")]
+    // [ValidateSet(nameof(TextMateLanguages), ErrorMessage = "Value '{0}' is invalid. Try one of: {1}")]
     public string Language { get; set; } = "powershell";
 
     [Parameter()]
@@ -45,17 +46,13 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         }
     }
 }
-internal class TextMateLanguages : IValidateSetValuesGenerator
+public class TextMateLanguages : IValidateSetValuesGenerator
 {
     private static readonly string[] Lookup;
     static TextMateLanguages()
     {
-        Lookup = new RegistryOptions(ThemeName.Red)
-            .GetAvailableGrammarDefinitions()
-            .Select(def => def.Name)
-            .ToArray();
+        Lookup = new RegistryOptions(ThemeName.Red).GetAvailableGrammarDefinitions().Select(x => x.Name).ToArray();
     }
-
     public string[] GetValidValues()
     {
         return Lookup;

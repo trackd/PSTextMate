@@ -1,20 +1,21 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
+using System.Collections.Generic;
 using System.Management.Automation;
 using TextMateSharp.Grammars;
 using TextMateSharp.Registry;
-using System.Linq;
-using Spectre.Console;
 
 namespace PwshSpectreConsole;
 
-[Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "File")]
+[Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
 [Alias("st")]
 public sealed class ShowTextMateCmdlet : PSCmdlet
 {
+    private readonly List<string> _inputObjectBuffer = new List<string>();
+
     [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
-    [ValidateNotNullOrEmpty]
-    [Alias("InputString")]
+    [AllowEmptyString]
     public string InputObject { get; set; } = null!;
 
     [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "File", Position = 0)]
@@ -23,6 +24,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     public string File { get; set; } = null!;
 
     [Parameter(ParameterSetName = "String")]
+    // todo: fix this..
     // [ValidateSet(nameof(TextMateLanguages), ErrorMessage = "Value '{0}' is invalid. Try one of: {1}")]
     public string Language { get; set; } = "powershell";
 
@@ -33,15 +35,31 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     {
         if (ParameterSetName == "String" && null != InputObject)
         {
-            var StringArray = InputObject.Split(Environment.NewLine);
-            var rows = TextMate.String(StringArray, Theme, Language);
+            _inputObjectBuffer.Add(InputObject);
+        }
+        // else if (ParameterSetName == "File" && null != File)
+        // {
+        //     string ResolvedPath = GetUnresolvedProviderPathFromPSPath(File);
+        //     FileInfo Filepath = new(ResolvedPath);
+        //     if (!System.IO.File.Exists(Filepath.FullName))
+        //     {
+        //         throw new FileNotFoundException("File not found", ResolvedPath);
+        //     }
+        //     var rows = TextMate.ReadFile(Filepath.FullName, Theme, Filepath.Extension);
+        //     WriteObject(rows);
+        // }
+    }
+    protected override void EndProcessing()
+    {
+        if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0)
+        {
+            var rows = TextMate.String(_inputObjectBuffer.ToArray(), Theme, Language);
             WriteObject(rows);
         }
-        else if(ParameterSetName == "File" && null != File)
+        else if (ParameterSetName == "File" && null != File)
         {
-            // this allows for relative paths to be used
             string ResolvedPath = GetUnresolvedProviderPathFromPSPath(File);
-            FileInfo Filepath = new FileInfo(ResolvedPath);
+            FileInfo Filepath = new(ResolvedPath);
             if (!System.IO.File.Exists(Filepath.FullName))
             {
                 throw new FileNotFoundException("File not found", ResolvedPath);
@@ -56,7 +74,7 @@ public class TextMateLanguages : IValidateSetValuesGenerator
     private static readonly string[] Lookup;
     static TextMateLanguages()
     {
-        Lookup = new RegistryOptions(ThemeName.Red).GetAvailableGrammarDefinitions().Select(x => x.Name).ToArray();
+        Lookup = new RegistryOptions(ThemeName.Dark).GetAvailableGrammarDefinitions().Select(x => x.Name).ToArray();
     }
     public string[] GetValidValues()
     {

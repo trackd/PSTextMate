@@ -9,6 +9,12 @@ this is still in alpha stage, so expect breaking changes.
 
 todo: add custom grammars, add custom themes.  
 
+## libraries
+
+[TextMateSharp](https://github.com/danipen/TextMateSharp)  
+[PwshSpectreConsole](https://github.com/ShaunLawrie/PwshSpectreConsole)  
+[SpectreConsole](https://github.com/spectreconsole/spectre.console)  
+
 ## Grammars and Themes
 
 | grammars      | themes            |
@@ -62,9 +68,3 @@ todo: add custom grammars, add custom themes.
 | vb            |                   |
 | xml           |                   |
 | yaml          |                   |
-
-## libraries
-
-[TextMateSharp](https://github.com/danipen/TextMateSharp)  
-[PwshSpectreConsole](https://github.com/ShaunLawrie/PwshSpectreConsole)  
-[SpectreConsole](https://github.com/spectreconsole/spectre.console)  

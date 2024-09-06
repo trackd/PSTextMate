@@ -4,20 +4,30 @@ param(
 if (-Not $PSScriptRoot) {
     return 'Run this script from the root of the project'
 }
+Push-Location $PSScriptRoot
+
 dotnet clean
 dotnet restore
-dotnet publish "$PSScriptRoot/src/PSTextMate.csproj" -c Release -o $PSScriptRoot/packages
-$null = & {
-    Get-ChildItem -Path "$PSScriptRoot/Module/lib/" -File | Remove-Item -Force
-    Get-ChildItem -Path $PSScriptRoot/packages/runtimes/win-x64/native -Filter *.dll | Copy-Item -Destination $PSScriptRoot/packages -Force
-    Get-ChildItem -Path $PSScriptRoot/packages/runtimes/osx/native -Filter *.dylib | Copy-Item -Destination $PSScriptRoot/packages -Force
-    Get-ChildItem -Path $PSScriptRoot/packages/runtimes/linux-x64/native -Filter *.so | Copy-Item -Destination $PSScriptRoot/packages -Force
-    Remove-Item $PSScriptRoot/packages/System.Text.*.dll -Force
-    Remove-Item "$PSScriptRoot/packages/PSTextMate.deps.json" -Force
-    Remove-Item "$PSScriptRoot/packages/PSTextMate.pdb" -Force
+
+$moduleLibFolder = Join-Path $PSScriptRoot 'Module' 'lib'
+if (-Not (Test-Path $moduleLibFolder)) {
+    $null = New-Item -ItemType Directory -Path $moduleLibFolder -Force
 }
 
-if (-Not (Test-Path "$PSScriptRoot/Module/lib")) {
-    $null = New-Item -ItemType Directory -Path "$PSScriptRoot/Module/lib/"
-}
-Get-Childitem -Path "$PSScriptRoot/packages" -File | Move-Item -Destination "$PSScriptRoot/Module/lib/" -Force
+$csproj = Get-Item (Join-Path $PSScriptRoot 'src' 'PSTextMate.csproj')
+$outputfolder = Get-Item (Join-Path $PSScriptRoot 'packages')
+
+dotnet publish $csproj.FullName -c Release -o $outputfolder.FullName
+
+Get-ChildItem -Path $moduleLibFolder -File | Remove-Item -Force
+
+
+Get-ChildItem -Path (Join-Path $outputfolder 'runtimes' 'win-x64' 'native') -Filter *.dll | Move-Item -Destination $moduleLibFolder -Force
+Get-ChildItem -Path (Join-Path $outputfolder 'runtimes' 'osx' 'native') -Filter *.dylib | Move-Item -Destination $moduleLibFolder -Force
+Get-ChildItem -Path (Join-Path $outputfolder 'runtimes' 'linux-x64' 'native') -Filter *.so | Copy-Item -Destination $moduleLibFolder -Force
+Move-Item (Join-Path $outputfolder 'PSTextMate.dll') -Destination (Split-Path $moduleLibFolder) -Force
+Get-ChildItem -Path $outputfolder -File |
+    Where-Object { -Not $_.Name.StartsWith('System.Text') -And $_.Extension -notin '.json','.pdb' } |
+        Move-Item -Destination $moduleLibFolder -Force
+
+Pop-Location

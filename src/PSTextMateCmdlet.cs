@@ -6,7 +6,7 @@ using TextMateSharp.Registry;
 using System.Linq;
 using Spectre.Console;
 
-namespace PwshSpectreConsole.SyntaxHighlight;
+namespace PwshSpectreConsole;
 
 [Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "File")]
 [Alias("st")]
@@ -34,14 +34,19 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         if (ParameterSetName == "String" && null != InputObject)
         {
             var StringArray = InputObject.Split(Environment.NewLine);
-            var rows = Highlight.String(StringArray, Theme, Language);
+            var rows = TextMate.String(StringArray, Theme, Language);
             WriteObject(rows);
         }
         else if(ParameterSetName == "File" && null != File)
         {
             // this allows for relative paths to be used
-            var Filepath = GetUnresolvedProviderPathFromPSPath(File);
-            var rows = Highlight.ReadFile(Filepath, Theme, Path.GetExtension(Filepath));
+            string ResolvedPath = GetUnresolvedProviderPathFromPSPath(File);
+            FileInfo Filepath = new FileInfo(ResolvedPath);
+            if (!System.IO.File.Exists(Filepath.FullName))
+            {
+                throw new FileNotFoundException("File not found", ResolvedPath);
+            }
+            var rows = TextMate.ReadFile(Filepath.FullName, Theme, Filepath.Extension);
             WriteObject(rows);
         }
     }

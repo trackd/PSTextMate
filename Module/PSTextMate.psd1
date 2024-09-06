@@ -1,5 +1,5 @@
 @{
-    RootModule        = './lib/PSTextMate.dll'
+    RootModule        = 'PSTextMate.dll'
     ModuleVersion     = '0.0.2'
     GUID              = '5ba21f1d-5ca4-49df-9a07-a2ad379feb00'
     Author            = 'trackd'

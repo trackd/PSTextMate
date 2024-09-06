@@ -9,13 +9,9 @@ using TextMateSharp.Registry;
 using Spectre.Console;
 
 
-namespace PwshSpectreConsole.SyntaxHighlight;
-public class Highlight
+namespace PwshSpectreConsole;
+public class TextMate
 {
-    public static ThemeName GetTheme(string themeName)
-    {
-        return Enum.Parse<ThemeName>(themeName, true);
-    }
     public static Rows[]? String(string[] lines, ThemeName themeName, string grammarId)
     {
         RegistryOptions options = new RegistryOptions(themeName);
@@ -24,7 +20,7 @@ public class Highlight
         IGrammar grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
         if (grammar == null)
         {
-            throw new Exception("Grammar not found.");
+            throw new Exception("Grammar not found for language: " + grammarId);
         }
         return Write(lines, theme, grammar);
     }
@@ -37,7 +33,7 @@ public class Highlight
         IGrammar grammar = registry.LoadGrammar(options.GetScopeByExtension(Extension));
         if (grammar == null)
         {
-            throw new Exception("Grammar not found.");
+            throw new Exception("Grammar not found for extension: " + Extension);
         }
         return Write(lines, theme, grammar);
     }
@@ -79,14 +75,7 @@ public class Highlight
                     }
 
                     var (textEscaped, style) = WriteToken(line.SubstringAtIndexes(startIndex, endIndex), foreground, background, fontStyle, theme);
-                    if (style == null)
-                    {
-                        builder.Append(textEscaped);
-                    }
-                    else
-                    {
-                        builder.AppendWithStyle(style, textEscaped);
-                    }
+                    builder.AppendWithStyle(style, textEscaped);
                 }
                 var row = new Rows(
                     new Markup(builder.ToString())

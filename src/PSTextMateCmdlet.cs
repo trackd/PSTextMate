@@ -12,7 +12,8 @@ namespace PwshSpectreConsole;
 [Alias("st")]
 public sealed class ShowTextMateCmdlet : PSCmdlet
 {
-    private readonly List<string> _inputObjectBuffer = new List<string>();
+    // private readonly List<string> _inputObjectBuffer = new List<string>();
+    private readonly List<string> _inputObjectBuffer = new();
 
     [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
     [AllowEmptyString]
@@ -31,40 +32,43 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.Dark;
 
+    [Parameter(ParameterSetName = "File")]
+    public string ExtensionOverride { get; set; } = null!;
+
     protected override void ProcessRecord()
     {
         if (ParameterSetName == "String" && null != InputObject)
         {
+            // if someone is piping in a null string, we should still add it to the buffer..
             _inputObjectBuffer.Add(InputObject);
         }
-        // else if (ParameterSetName == "File" && null != File)
-        // {
-        //     string ResolvedPath = GetUnresolvedProviderPathFromPSPath(File);
-        //     FileInfo Filepath = new(ResolvedPath);
-        //     if (!System.IO.File.Exists(Filepath.FullName))
-        //     {
-        //         throw new FileNotFoundException("File not found", ResolvedPath);
-        //     }
-        //     var rows = TextMate.ReadFile(Filepath.FullName, Theme, Filepath.Extension);
-        //     WriteObject(rows);
-        // }
     }
     protected override void EndProcessing()
     {
         if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0)
         {
-            var rows = TextMate.String(_inputObjectBuffer.ToArray(), Theme, Language);
+            string[] strings = _inputObjectBuffer.ToArray();
+            // if all strings are empty, don't bother
+            if (strings.All(s => string.IsNullOrEmpty(s)))
+            {
+                return;
+            }
+            var rows = TextMate.String(strings, Theme, Language);
             WriteObject(rows);
         }
         else if (ParameterSetName == "File" && null != File)
         {
             string ResolvedPath = GetUnresolvedProviderPathFromPSPath(File);
             FileInfo Filepath = new(ResolvedPath);
-            if (!System.IO.File.Exists(Filepath.FullName))
+            if (!Filepath.Exists)
             {
                 throw new FileNotFoundException("File not found", ResolvedPath);
             }
-            var rows = TextMate.ReadFile(Filepath.FullName, Theme, Filepath.Extension);
+            // extension override, it decides the grammar to use for highlighting
+            string ext = !string.IsNullOrEmpty(ExtensionOverride)
+                ? (ExtensionOverride.StartsWith('.') ? ExtensionOverride : '.' + ExtensionOverride)
+                : Filepath.Extension;
+            var rows = TextMate.ReadFile(Filepath.FullName, Theme, ext);
             WriteObject(rows);
         }
     }

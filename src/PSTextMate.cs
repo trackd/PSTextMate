@@ -101,8 +101,9 @@ public class TextMate
 
     static Color GetColor(int colorId, Theme theme)
     {
-        if (colorId == -1)
+        if (colorId == -1) {
             return Color.Default;
+        }
         return HexToColor(theme.GetColor(colorId));
     }
 

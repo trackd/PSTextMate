@@ -15,8 +15,8 @@ public class Converter
 
     public static Rows? String(string[] lines, ThemeName themeName, string grammarId)
     {
-        RegistryOptions options = new RegistryOptions(themeName);
-        Registry registry = new Registry(options);
+        RegistryOptions options = new(themeName);
+        Registry registry = new(options);
         Theme theme = registry.GetTheme();
         IGrammar grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
         if (grammar == null)
@@ -29,8 +29,8 @@ public class Converter
     public static Rows? ReadFile(string fullName, ThemeName themeName, string Extension)
     {
         string[] lines = File.ReadAllLines(fullName);
-        RegistryOptions options = new RegistryOptions(themeName);
-        Registry registry = new Registry(options);
+        RegistryOptions options = new(themeName);
+        Registry registry = new(options);
         Theme theme = registry.GetTheme();
         IGrammar grammar = registry.LoadGrammar(options.GetScopeByExtension(Extension));
         if (grammar == null)
@@ -42,7 +42,7 @@ public class Converter
 
     internal static Rows? Render(string[] String, Theme theme, IGrammar grammar)
     {
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder = new();
         List<IRenderable> rows = new();
         try
         {
@@ -95,7 +95,7 @@ public class Converter
         Decoration decoration = GetDecoration(fontStyle);
         Color backgroundColor = GetColor(background, theme);
         Color foregroundColor = GetColor(foreground, theme);
-        Style style = new Style(foregroundColor, backgroundColor, decoration);
+        Style style = new(foregroundColor, backgroundColor, decoration);
         return (textEscaped, style);
     }
 
@@ -126,13 +126,11 @@ public class Converter
     {
         if (hexString.StartsWith("#"))
         {
-            hexString = hexString.Substring(1);
+            hexString = hexString[1..];
         }
-        byte r, g, b = 0;
-        r = byte.Parse(hexString.Substring(0, 2), NumberStyles.AllowHexSpecifier);
-        g = byte.Parse(hexString.Substring(2, 2), NumberStyles.AllowHexSpecifier);
-        b = byte.Parse(hexString.Substring(4, 2), NumberStyles.AllowHexSpecifier);
-        return new Color(r, g, b);
+
+        var c = Convert.FromHexString(hexString);
+        return new Color(c[0], c[1], c[2]);
     }
     internal static bool AllIsNullOrEmpty(string[] strings)
     {
@@ -157,7 +155,7 @@ internal static class StringExtensions
 {
     internal static string SubstringAtIndexes(this string str, int startIndex, int endIndex)
     {
-        return str.Substring(startIndex, endIndex - startIndex);
+        return str[startIndex..endIndex];
     }
 }
 

@@ -12,12 +12,5 @@
       <PackageReference Include="TextMateSharp.Grammars" Version="1.0.63" />
       <PackageReference Include="Onigwrap" Version="1.0.6" />
       <PackageReference Include="System.Management.Automation" Version="7.2.23" PrivateAssets="all" />
-    <!-- <PackageReference Include="System.Text.Json" PrivateAssets="all"/> -->
-    <!-- <PackageReference Include="System.Text.Encodings.Web" PrivateAssets="all"/> -->
   </ItemGroup>
-	<!-- <ItemGroup> -->
-		<!-- <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-447r-wph3-92pm" /> -->
-		<!-- <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-555c-2p6r-68mm" /> -->
-	<!-- </ItemGroup> -->
-
 </Project>

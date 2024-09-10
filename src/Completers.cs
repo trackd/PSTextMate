@@ -46,17 +46,17 @@ internal class Completors
 
 public class TextMateLanguages : IValidateSetValuesGenerator
 {
-  public string[] GetValidValues()
-  {
-    return Completors.Languages;
-  }
+    public string[] GetValidValues()
+    {
+        return Completors.Languages;
+    }
 }
 public class TextMateExtensions : IValidateSetValuesGenerator
 {
-  public string[] GetValidValues()
-  {
-    return Completors.Extensions;
-  }
+    public string[] GetValidValues()
+    {
+        return Completors.Extensions;
+    }
 }
 public class TextMateExtensionTransform : ArgumentTransformationAttribute
 {

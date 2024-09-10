@@ -64,7 +64,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
             }
             // extension override, it decides the grammar to use for highlighting
             string ext = !string.IsNullOrEmpty(ExtensionOverride)
-                ? (ExtensionOverride.StartsWith('.') ? ExtensionOverride : '.' + ExtensionOverride)
+                ? ExtensionOverride
                 : Filepath.Extension;
             var rows = Converter.ReadFile(Filepath.FullName, Theme, ext);
             WriteObject(rows);

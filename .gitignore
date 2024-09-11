@@ -3,4 +3,4 @@ src/bin/*
 src/obj/*
 src/.vs/*
 Module/lib
-harness.ps1
+src/debugRender.cs

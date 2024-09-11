@@ -30,6 +30,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     [Parameter(ParameterSetName = "Path")]
     [TextMateExtensionTransform()]
     [ValidateSet(typeof(TextMateExtensions))]
+    [Alias("As")]
     public string ExtensionOverride { get; set; } = null!;
 
     protected override void ProcessRecord()

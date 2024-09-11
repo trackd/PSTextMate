@@ -68,3 +68,38 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         }
     }
 }
+
+[Cmdlet(VerbsDiagnostic.Test, "SupportedTextMate")]
+public sealed class TestTextMateCmdlet : PSCmdlet
+{
+    [Parameter()]
+    public string? Extension { get; set; }
+
+    [Parameter()]
+    public string? Language { get; set; }
+
+    [Parameter()]
+    public string? File { get; set; }
+
+    protected override void EndProcessing() {
+        if (!string.IsNullOrEmpty(File)) {
+            WriteObject(TextMateExtensions.IsSupportedFile(File));
+        }
+        if (!string.IsNullOrEmpty(Extension)) {
+            WriteObject(TextMateExtensions.IsSupportedExtension(Extension));
+        }
+        if (!string.IsNullOrEmpty(Language)) {
+            WriteObject(TextMateLanguages.IsSupportedLanguage(Language));
+        }
+    }
+}
+
+[OutputType(typeof(Language))]
+[Cmdlet(VerbsCommon.Get, "SupportedTextMate")]
+public sealed class GetTextMateCmdlet : PSCmdlet
+{
+    protected override void EndProcessing()
+    {
+        WriteObject(TextMateHelper.AvailableLanguages, enumerateCollection: true);
+    }
+}

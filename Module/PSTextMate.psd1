@@ -1,13 +1,14 @@
 @{
     RootModule        = 'PSTextMate.dll'
-    ModuleVersion     = '0.0.2'
+    ModuleVersion     = '0.0.3'
     GUID              = '5ba21f1d-5ca4-49df-9a07-a2ad379feb00'
     Author            = 'trackd'
     CompanyName       = 'trackd'
     Copyright         = '(c) trackd. All rights reserved.'
-    CmdletsToExport   = 'Show-TextMate'
+    CmdletsToExport    = 'Show-TextMate', 'Test-SupportedTextMate', 'Get-SupportedTextMate'
     AliasesToExport   = '*'
     RequiredAssemblies = './lib/TextMateSharp.dll', './lib/TextMateSharp.Grammars.dll', './lib/Onigwrap.dll'
+    FormatsToProcess   = 'PSTextMate.format.ps1xml'
     RequiredModules    = @(
         @{
             ModuleName      = 'PwshSpectreConsole'

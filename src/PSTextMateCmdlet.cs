@@ -1,10 +1,7 @@
-﻿using System;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Collections.Generic;
 using System.Management.Automation;
 using TextMateSharp.Grammars;
-using TextMateSharp.Registry;
 
 namespace PwshSpectreConsole.TextMate;
 

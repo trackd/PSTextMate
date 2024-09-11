@@ -3,7 +3,6 @@ using System;
 using System.Linq;
 using System.Management.Automation;
 using TextMateSharp.Grammars;
-using TextMateSharp.Registry;
 
 namespace PwshSpectreConsole.TextMate;
 
@@ -50,6 +49,10 @@ public class TextMateLanguages : IValidateSetValuesGenerator
     {
         return Completors.Languages;
     }
+    public static bool IsSupportedLanguage(string language)
+    {
+        return Completors.Languages.Contains(language);
+    }
 }
 public class TextMateExtensions : IValidateSetValuesGenerator
 {
@@ -57,6 +60,15 @@ public class TextMateExtensions : IValidateSetValuesGenerator
     {
         return Completors.Extensions;
     }
+    public static bool IsSupportedExtension(string extension)
+    {
+        return Completors.Extensions.Contains(extension);
+    }
+    public static bool IsSupportedFile(string file)
+    {
+        return Completors.Extensions.Contains(System.IO.Path.GetExtension(file));
+    }
+
 }
 public class TextMateExtensionTransform : ArgumentTransformationAttribute
 {

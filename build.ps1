@@ -1,6 +1,3 @@
-param(
-    [switch]$Clean
-)
 if (-Not $PSScriptRoot) {
     return 'Run this script from the root of the project'
 }

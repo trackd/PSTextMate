@@ -19,7 +19,29 @@ $layout = New-SpectreLayout -Name "root" -Rows @(
 function Get-TitlePanel {
     return "File Browser - Spectre Live Demo [gray]$(Get-Date)[/]" | Format-SpectreAligned -HorizontalAlignment Center -VerticalAlignment Middle | Format-SpectrePanel -Expand
 }
-
+function EscapeAnsi {
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [String] $String,
+        [Switch] $Highlight
+    )
+    process {
+        $String.EnumerateRunes() | ForEach-Object {
+            if ($_.Value -lt 32) {
+                if ($Highlight) {
+                    $PSStyle.Background.Red
+                    [Text.Rune]::new($_.Value + 9216)
+                    $PSStyle.Reset
+                } else {
+                    [Text.Rune]::new($_.Value + 9216)
+                }
+            }
+            else {
+                $_
+            }
+        } | Join-String
+    }
+}
 function Get-FileListPanel {
     param (
         $Files,
@@ -45,13 +67,13 @@ function Get-PreviewPanel {
         $result = "[grey]$($SelectedFile.Name) is a directory.[/]"
     } else {
         try {
-            $content = Get-Content -Path $item.FullName -Raw -ErrorAction Stop
             if ([PwshSpectreConsole.TextMate.TextMateExtensions]::IsSupportedFile($item.FullName)) {
                 $result = Show-TextMate -Path $item.FullName -ErrorAction Stop
             }
-            # else {
-            #     $result = "[grey]$($content | Get-SpectreEscapedText)[/]"
-            # }
+            else {
+                $content = -Join (Get-Content -Path $item.FullName -ErrorAction Stop)
+                $result = ($Content | EscapeAnsi | Get-SpectreEscapedText) | Join-String -OutputPrefix "[grey]" -OutputSuffix "[/]"
+            }
         } catch {
             $result = "[red]Error reading file content: $($_.Exception.Message | Get-SpectreEscapedText)[/]"
         }

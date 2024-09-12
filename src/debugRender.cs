@@ -11,8 +11,6 @@ namespace PwshSpectreConsole.TextMate;
 
 public class Debug
 {
-    private static string? url; // Declare 'url' as a class-level variable
-
     public static void RenderDebug(string[] lines, ThemeName themeName, string grammarId)
     {
         RegistryOptions options = new(themeName);
@@ -24,11 +22,28 @@ public class Debug
         foreach (string line in lines)
         {
             ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
-
             ruleStack = result.RuleStack;
-
-            foreach (IToken token in result.Tokens)
+            for (int i = 0; i < result.Tokens.Length; i++)
             {
+                IToken token = result.Tokens[i];
+                if (token.Scopes.Contains("string.other.link.title.markdown"))
+                {
+                    // hacky way to get the url in one go.
+                    // token 0 = [
+                    // token 1 = linktext // we detect this
+                    // token 2 = ]
+                    // token 3 = (
+                    // token 4 = url // check if this is a url
+                    // token 5 = )
+                    IToken urltoken = result.Tokens[i + 3];
+                    if (urltoken.Scopes.Contains("markup.underline.link.markdown"))
+                    {
+                        WriteUrl(line.SubstringAtIndexes(urltoken.StartIndex, urltoken.EndIndex), line.SubstringAtIndexes(token.StartIndex, token.EndIndex));
+                        // skip ahead, we dont need to parse this again.
+                        i += 4;
+                        continue;
+                    }
+                }
                 int startIndex = (token.StartIndex > line.Length) ?
                     line.Length : token.StartIndex;
                 int endIndex = (token.EndIndex > line.Length) ?
@@ -38,7 +53,8 @@ public class Debug
                 int background = -1;
                 FontStyle fontStyle = FontStyle.NotSet;
                 Console.WriteLine(string.Format(
-                    "Tokens: token from {0} to {1} -->{2}<-- with scopes {3}, token index {4} to {5}",
+                    "Tokens:{0} token from {1} to {2} -->{3}<-- with scopes {4}",
+                    i,
                     startIndex,
                     endIndex,
                     line.SubstringAtIndexes(startIndex, endIndex),
@@ -46,18 +62,6 @@ public class Debug
                     token.StartIndex,
                     token.EndIndex
                 ));
-
-                if (token.Scopes.Contains("string.other.link.title.markdown"))
-                {
-                    // super hacky way to get the url..
-                    url = line.SubstringAtIndexes(startIndex, endIndex);
-                }
-                if (token.Scopes.Contains("markup.underline.link.markdown") && url != null)
-                {
-                    WriteUrl(line.SubstringAtIndexes(startIndex, endIndex), url);
-                    url = null!;
-                }
-
                 foreach (var themeRule in theme.Match(token.Scopes))
                 {
                     if (foreground == -1 && themeRule.foreground > 0)
@@ -69,8 +73,6 @@ public class Debug
                     if (fontStyle == FontStyle.NotSet && themeRule.fontStyle > 0)
                         fontStyle = themeRule.fontStyle;
                 }
-
-                WriteDebug(line.SubstringAtIndexes(startIndex, endIndex), foreground, background, fontStyle, theme);
             }
 
             Console.WriteLine();
@@ -94,27 +96,5 @@ public class Debug
         Console.Write(ESC + "[101m");
         AnsiConsole.Markup($"[link={Title}]{url}[/]");
         Console.WriteLine(ESC + "[0m");
-    }
-
-    static void WriteDebug(string text, int foreground, int background, FontStyle fontStyle, Theme theme)
-    {
-        // Console.WriteLine("WriteDebug: text: {0}, fg: {1}, bg: {2}, style: {3}",
-        //     text, foreground, background, fontStyle);
-        // if (foreground == -1)
-        // {
-        //     Console.Write(text);
-        //     return;
-        // }
-        // string textEscaped = Markup.Escape(text);
-
-        // Decoration decoration = Converter.GetDecoration(fontStyle);
-
-        // Color backgroundColor = Converter.GetColor(background, theme);
-        // Color foregroundColor = Converter.GetColor(foreground, theme);
-
-        // Style style = new(foregroundColor, backgroundColor, decoration);
-        // Markup markup = new(textEscaped, style);
-
-        // AnsiConsole.Write(markup);
     }
 }

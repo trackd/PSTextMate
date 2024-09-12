@@ -3,4 +3,4 @@ src/bin/*
 src/obj/*
 src/.vs/*
 Module/lib
-src/debugRender.cs
+debug.md

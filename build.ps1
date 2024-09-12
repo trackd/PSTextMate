@@ -12,9 +12,11 @@ if (-Not (Test-Path $moduleLibFolder)) {
 }
 
 $csproj = Get-Item (Join-Path $PSScriptRoot 'src' 'PSTextMate.csproj')
-$outputfolder = Get-Item (Join-Path $PSScriptRoot 'packages')
-
-dotnet publish $csproj.FullName -c Release -o $outputfolder.FullName
+$outputfolder = Join-Path $PSScriptRoot 'packages'
+if (-Not (Test-Path -Path $outputfolder)) {
+    $null = New-Item -ItemType Directory -Path $outputfolder -Force
+}
+dotnet publish $csproj.FullName -c Release -o $outputfolder
 
 Get-ChildItem -Path $moduleLibFolder -File | Remove-Item -Force
 

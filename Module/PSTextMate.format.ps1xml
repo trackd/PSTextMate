@@ -41,5 +41,77 @@
           </TableRowEntries>
         </TableControl>
     </View>
+    <View>
+      <Name>TextMateDebug</Name>
+      <ViewSelectedBy>
+        <TypeName>PwshSpectreConsole.TextMate.Test+TextMateDebug</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>Index</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Text</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Scopes</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>
+                    return $_.Index -join '-'
+                  </ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Text</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>
+                    return $_.Scopes -join ', '
+                  </ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
+      <Name>TextMateDebug</Name>
+      <ViewSelectedBy>
+        <TypeName>PwshSpectreConsole.TextMate.Test+TokenDebug</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>Text</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Style</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <PropertyName>Text</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>
+                  return 'fg: {0}, bg: {1}, deco: {2}, link: {3}' -f (
+                    $_.Style.Foreground.ToMarkup(),
+                    $_.Style.Background.ToMarkup(),
+                    $_.Style.Decoration,
+                    $_.Style.Link)
+                  </ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
   </ViewDefinitions>
 </Configuration>

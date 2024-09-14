@@ -15,7 +15,7 @@ $md = @'
 [fancy title](https://www.google.com)
 '@
 
-[PwshSpectreConsole.TextMate.Debug]::DebugTextMate($md, [TextMateSharp.Grammars.ThemeName]::Dark, 'markdown')
+[PwshSpectreConsole.TextMate.Test]::DebugTextMate($md, [TextMateSharp.Grammars.ThemeName]::Dark, 'markdown')
 Pop-Location
 
 

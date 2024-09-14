@@ -45,3 +45,11 @@ internal static class StringBuilderExtensions
     return builder.Append(value);
   }
 }
+
+// internal static class ParagraphExtensions {
+//   // provide an overload for updating the length of the
+//   protected override Measurement Measure(RenderOptions options, int maxWidth)
+//   {
+
+//   }
+// }

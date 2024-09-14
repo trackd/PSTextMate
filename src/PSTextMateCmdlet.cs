@@ -104,3 +104,30 @@ public sealed class GetTextMateCmdlet : PSCmdlet
         WriteObject(TextMateHelper.AvailableLanguages, enumerateCollection: true);
     }
 }
+[Cmdlet(VerbsDiagnostic.Debug, "TextMate")]
+public sealed class DebugTextMateCmdlet : PSCmdlet
+{
+    [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
+    public string[] InputObject { get; set; } = null!;
+    [Parameter()]
+    [ValidateSet(typeof(TextMateLanguages))]
+    public string Language { get; set; } = "powershell";
+
+    [Parameter()]
+    public ThemeName Theme { get; set; } = ThemeName.Dark;
+    [Parameter()]
+    public SwitchParameter Tokens { get; set; }
+    protected override void EndProcessing()
+    {
+        if (Tokens.IsPresent)
+        {
+            var rows = Test.DebugTextMateTokens(InputObject, Theme, Language);
+            WriteObject(rows, true);
+        }
+        else
+        {
+            var rows = Test.DebugTextMate(InputObject, Theme, Language);
+            WriteObject(rows, true);
+        }
+    }
+}

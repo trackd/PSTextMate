@@ -66,8 +66,10 @@ public class Converter
                     IToken token = result.Tokens[i];
                     if (token.Scopes.Contains("meta.link.inline.markdown"))
                     {
+                        i++; // first token should just be a bracket
                         while (i < result.Tokens.Length && result.Tokens[i].Scopes.Contains("meta.link.inline.markdown"))
                         {
+                            // while loop is a bit hacky, but if someone has multiple links back to back.. it should work.
                             if (result.Tokens[i].Scopes.Contains("string.other.link.title.markdown"))
                             {
                                 title = line.SubstringAtIndexes(result.Tokens[i].StartIndex, result.Tokens[i].EndIndex);
@@ -182,8 +184,8 @@ public class Converter
     }
     internal static (string textEscaped, Style style) WriteMarkdownLinkWStyle(string url, string linkText)
     {
-        string mdlink = $"[link={url}]{linkText}[/]";
-        Style style = new(Color.Blue, Color.Default, Decoration.Underline);
+        string mdlink = $"[link={url}]{Markup.Escape(linkText)}[/]";
+        Style style = new(Color.Blue, Color.Default);
         return (mdlink, style);
     }
 

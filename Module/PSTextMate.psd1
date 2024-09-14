@@ -5,7 +5,7 @@
     Author            = 'trackd'
     CompanyName       = 'trackd'
     Copyright         = '(c) trackd. All rights reserved.'
-    CmdletsToExport    = 'Show-TextMate', 'Test-SupportedTextMate', 'Get-SupportedTextMate'
+    CmdletsToExport    = 'Show-TextMate', 'Test-SupportedTextMate', 'Get-SupportedTextMate','Debug-TextMate'
     AliasesToExport   = '*'
     RequiredAssemblies = './lib/TextMateSharp.dll', './lib/TextMateSharp.Grammars.dll', './lib/Onigwrap.dll'
     FormatsToProcess   = 'PSTextMate.format.ps1xml'

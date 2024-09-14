@@ -107,7 +107,7 @@ public sealed class GetTextMateCmdlet : PSCmdlet
 [Cmdlet(VerbsDiagnostic.Debug, "TextMate")]
 public sealed class DebugTextMateCmdlet : PSCmdlet
 {
-    [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
+    [Parameter(Mandatory = true, ValueFromPipeline = true)]
     public string[] InputObject { get; set; } = null!;
     [Parameter()]
     [ValidateSet(typeof(TextMateLanguages))]
@@ -123,11 +123,9 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
         {
             var rows = Test.DebugTextMateTokens(InputObject, Theme, Language);
             WriteObject(rows, true);
+            return;
         }
-        else
-        {
-            var rows = Test.DebugTextMate(InputObject, Theme, Language);
-            WriteObject(rows, true);
-        }
+        var rows = Test.DebugTextMate(InputObject, Theme, Language);
+        WriteObject(rows, true);
     }
 }

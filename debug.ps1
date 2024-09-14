@@ -1,3 +1,12 @@
+<#
+$lookup = [TextMateSharp.Grammars.RegistryOptions]::new('red')
+$reg = [TextMateSharp.Registry.Registry]::new($lookup)
+$theme = $reg.GetTheme()
+$theme | Get-Member -MemberType Method
+$grammar = $reg.LoadGrammar($lookup.GetScopeByExtension('.md'))
+$grammar | Get-Member -MemberType Method
+#>
+
 Push-Location $PSScriptRoot
 & ./build.ps1
 
@@ -6,5 +15,17 @@ $md = @'
 [fancy title](https://www.google.com)
 '@
 
-[PwshSpectreConsole.TextMate.Debug]::RenderDebug($md, [TextMateSharp.Grammars.ThemeName]::Dark, 'markdown')
+[PwshSpectreConsole.TextMate.Debug]::DebugTextMate($md, [TextMateSharp.Grammars.ThemeName]::Dark, 'markdown')
 Pop-Location
+
+
+# $x = [Spectre.Console.Style]::new([Spectre.Console.Color]::Aqua, [Spectre.Console.Color]::Default, [Spectre.Console.Decoration]::Underline, 'https://foo.bar')
+# [Spectre.Console.Markup]::new('hello', $x)
+# [Spectre.Console.Markup]::new("[link=https://foo.com]$([Spectre.Console.Markup]::escape('[foo]'))[/]")
+# [Spectre.Console.Markup]::new("[link=https://foo.com]$([Spectre.Console.Markup]::escape('[foo]'))[/]")
+# [Spectre.Console.Markup]::new('[link=https://foo.com]foo[/]')
+
+$md2 = @'
+You can also find me on Discord in the [PowerShell discord](https://discord.gg/powershell) as `shaunlawrie`.
+'@
+[PwshSpectreConsole.TextMate.Debug]::DebugTextMate($md2, [TextMateSharp.Grammars.ThemeName]::Dark, 'markdown')

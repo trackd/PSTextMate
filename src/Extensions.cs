@@ -31,4 +31,17 @@ internal static class StringBuilderExtensions
     }
     return builder.Append(value);
   }
+  public static StringBuilder AppendWithStyleN(this StringBuilder builder, Style? style, string? value)
+  {
+    value ??= string.Empty;
+    if (style != null)
+    {
+      return builder.Append('[')
+      .Append(style.ToMarkup())
+      .Append(']')
+      .Append(value)
+      .Append("[/]");
+    }
+    return builder.Append(value);
+  }
 }

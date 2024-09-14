@@ -11,7 +11,7 @@ namespace PwshSpectreConsole.TextMate;
 
 public class Debug
 {
-    public static void RenderDebug(string[] lines, ThemeName themeName, string grammarId)
+    public static void DebugTextMate(string[] lines, ThemeName themeName, string grammarId)
     {
         RegistryOptions options = new(themeName);
         Registry registry = new(options);
@@ -25,25 +25,27 @@ public class Debug
             ruleStack = result.RuleStack;
             for (int i = 0; i < result.Tokens.Length; i++)
             {
-                IToken token = result.Tokens[i];
-                if (token.Scopes.Contains("string.other.link.title.markdown"))
-                {
-                    // hacky way to get the url in one go.
-                    // token 0 = [
-                    // token 1 = linktext // we detect this
-                    // token 2 = ]
-                    // token 3 = (
-                    // token 4 = url // check if this is a url
-                    // token 5 = )
-                    IToken urltoken = result.Tokens[i + 3];
-                    if (urltoken.Scopes.Contains("markup.underline.link.markdown"))
-                    {
-                        WriteUrl(line.SubstringAtIndexes(urltoken.StartIndex, urltoken.EndIndex), line.SubstringAtIndexes(token.StartIndex, token.EndIndex));
-                        // skip ahead, we dont need to parse this again.
-                        i += 4;
-                        continue;
-                    }
-                }
+                 IToken token = result.Tokens[i];
+                // if (token.Scopes[token.Scopes.Count - 1] == "string.other.link.title.markdown")
+                // {
+                //     // token.Scopes.Contains("string.other.link.title.markdown")
+                //     // hacky way to get the url in one go.
+                //     // token 0 = [
+                //     // token 1 = linktext // we detect this
+                //     // token 2 = ]
+                //     // token 3 = (
+                //     // token 4 = url // check if this is a url
+                //     // token 5 = )
+                //     IToken urltoken = result.Tokens[i + 3];
+                //     if (urltoken.Scopes[urltoken.Scopes.Count - 1] == "markup.underline.link.markdown")
+                //     {
+                //         // urltoken.Scopes.Contains("markup.underline.link.markdown")
+                //         WriteUrlDebug(line.SubstringAtIndexes(urltoken.StartIndex, urltoken.EndIndex), line.SubstringAtIndexes(token.StartIndex, token.EndIndex));
+                //         // skip ahead, we dont need to parse this again.
+                //         i += 4;
+                //         continue;
+                //     }
+                // }
                 int startIndex = (token.StartIndex > line.Length) ?
                     line.Length : token.StartIndex;
                 int endIndex = (token.EndIndex > line.Length) ?
@@ -89,12 +91,9 @@ public class Debug
         }
     }
 
-    static void WriteUrl(string Title, string url)
-    {
-        // just highlight it in red
-        string ESC = "\u001b";
-        Console.Write(ESC + "[101m");
-        AnsiConsole.Markup($"[link={Title}]{url}[/]");
-        Console.WriteLine(ESC + "[0m");
-    }
+    // static void WriteUrlDebug(string Title, string url)
+    // {
+    //     // just highlight it in red
+    //     AnsiConsole.Markup($"[link={Title}]{url}[/]");
+    // }
 }

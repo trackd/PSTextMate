@@ -22,6 +22,10 @@ public class Converter
         {
             throw new Exception("Grammar not found for language: " + grammarId);
         }
+        if (grammar.GetName() == "Markdown")
+        {
+            return RenderMarkdown(lines, theme, grammar);
+        }
         return Render(lines, theme, grammar);
     }
 
@@ -36,7 +40,81 @@ public class Converter
         {
             throw new Exception("Grammar not found for extension: " + Extension);
         }
+        if (grammar.GetName() == "Markdown")
+        {
+            return RenderMarkdown(lines, theme, grammar);
+        }
         return Render(lines, theme, grammar);
+    }
+    // specialcase markdown for spectre link rendering.. maybe more in the future..
+    // prefer to do this with TextMate grammar, need to check if that is possible.
+    internal static Rows? RenderMarkdown(string[] String, Theme theme, IGrammar grammar)
+    {
+        StringBuilder builder = new();
+        List<IRenderable> rows = new();
+        string? url = null!;
+        string? title = null!;
+        try
+        {
+            IStateStack? ruleStack = null;
+            foreach (string line in String)
+            {
+                ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
+                ruleStack = result.RuleStack;
+                for (int i = 0; i < result.Tokens.Length; i++)
+                {
+                    IToken token = result.Tokens[i];
+                    if (token.Scopes.Contains("meta.link.inline.markdown"))
+                    {
+                        while (i < result.Tokens.Length && result.Tokens[i].Scopes.Contains("meta.link.inline.markdown"))
+                        {
+                            if (result.Tokens[i].Scopes.Contains("string.other.link.title.markdown"))
+                            {
+                                title = line.SubstringAtIndexes(result.Tokens[i].StartIndex, result.Tokens[i].EndIndex);
+                            }
+                            if (result.Tokens[i].Scopes.Contains("markup.underline.link.markdown"))
+                            {
+                                url = line.SubstringAtIndexes(result.Tokens[i].StartIndex, result.Tokens[i].EndIndex);
+                            }
+                            if (title != null && url != null)
+                            {
+                                (string _text, Style _style) =  WriteMarkdownLinkWStyle(url, title);
+                                builder.AppendWithStyleN(_style, _text);
+                                title = null;
+                                url = null;
+                            }
+                            i++;
+                        }
+                        continue;
+                    }
+                    int startIndex = (token.StartIndex > line.Length) ? line.Length : token.StartIndex;
+                    int endIndex = (token.EndIndex > line.Length) ? line.Length : token.EndIndex;
+                    int foreground = -1;
+                    int background = -1;
+                    FontStyle fontStyle = FontStyle.NotSet;
+                    foreach (var themeRule in theme.Match(token.Scopes))
+                    {
+                        if (foreground == -1 && themeRule.foreground > 0)
+                            foreground = themeRule.foreground;
+                        if (background == -1 && themeRule.background > 0)
+                            background = themeRule.background;
+                        if (fontStyle == FontStyle.NotSet && themeRule.fontStyle > 0)
+                            fontStyle = themeRule.fontStyle;
+                    }
+                    var (textEscaped, style) = WriteToken(line.SubstringAtIndexes(startIndex, endIndex), foreground, background, fontStyle, theme);
+                    builder.AppendWithStyle(style, textEscaped);
+                }
+                var lineMarkup = builder.ToString();
+                // Preserve empty lines in rows output by using Text.Empty, Markup is stripping them for some reason
+                rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
+                builder.Clear();
+            }
+            return new Rows(rows.ToArray());
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("ERROR: " + ex.Message);
+        }
     }
 
     internal static Rows? Render(string[] String, Theme theme, IGrammar grammar)
@@ -45,8 +123,6 @@ public class Converter
         List<IRenderable> rows = new();
         try
         {
-            int ini = Environment.TickCount;
-            int tokenizeIni = Environment.TickCount;
             IStateStack? ruleStack = null;
             foreach (string line in String)
             {
@@ -96,6 +172,19 @@ public class Converter
         Color foregroundColor = GetColor(foreground, theme);
         Style style = new(foregroundColor, backgroundColor, decoration);
         return (textEscaped, style);
+    }
+    internal static string WriteMarkdownLink(string url, string linkText)
+    {
+        // string EscapedText = Markup.Escape(linkText);
+        string mdlink = $"[link={url}]{linkText}[/]";
+        // Console.WriteLine(mdlink);
+        return mdlink;
+    }
+    internal static (string textEscaped, Style style) WriteMarkdownLinkWStyle(string url, string linkText)
+    {
+        string mdlink = $"[link={url}]{linkText}[/] ";
+        Style style = new(Color.Blue, Color.Default, Decoration.Underline);
+        return (mdlink, style);
     }
 
     internal static Color GetColor(int colorId, Theme theme)

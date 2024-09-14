@@ -182,7 +182,7 @@ public class Converter
     }
     internal static (string textEscaped, Style style) WriteMarkdownLinkWStyle(string url, string linkText)
     {
-        string mdlink = $"[link={url}]{linkText}[/] ";
+        string mdlink = $"[link={url}]{linkText}[/]";
         Style style = new(Color.Blue, Color.Default, Decoration.Underline);
         return (mdlink, style);
     }

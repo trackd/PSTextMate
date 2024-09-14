@@ -40,7 +40,7 @@ internal static class StringBuilderExtensions
       .Append(style.ToMarkup())
       .Append(']')
       .Append(value)
-      .Append("[/]");
+      .Append("[/] ");
     }
     return builder.Append(value);
   }

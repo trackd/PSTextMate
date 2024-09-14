@@ -24,8 +24,3 @@ Pop-Location
 # [Spectre.Console.Markup]::new("[link=https://foo.com]$([Spectre.Console.Markup]::escape('[foo]'))[/]")
 # [Spectre.Console.Markup]::new("[link=https://foo.com]$([Spectre.Console.Markup]::escape('[foo]'))[/]")
 # [Spectre.Console.Markup]::new('[link=https://foo.com]foo[/]')
-
-$md2 = @'
-You can also find me on Discord in the [PowerShell discord](https://discord.gg/powershell) as `shaunlawrie`.
-'@
-[PwshSpectreConsole.TextMate.Debug]::DebugTextMate($md2, [TextMateSharp.Grammars.ThemeName]::Dark, 'markdown')

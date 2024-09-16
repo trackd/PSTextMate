@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using System.Globalization;
 using Spectre.Console;
 
@@ -44,12 +45,16 @@ internal static class StringBuilderExtensions
     }
     return builder.Append(value);
   }
+  public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, ReadOnlySpan<char> value)
+  {
+    if (style != null)
+    {
+      return builder.Append('[')
+      .Append(style.ToMarkup())
+      .Append(']')
+      .Append(value)
+      .Append("[/]");
+    }
+    return builder.Append(value);
+  }
 }
-
-// internal static class ParagraphExtensions {
-//   // provide an overload for updating the length of the
-//   protected override Measurement Measure(RenderOptions options, int maxWidth)
-//   {
-
-//   }
-// }

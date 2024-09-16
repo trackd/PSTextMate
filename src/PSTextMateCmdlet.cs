@@ -104,28 +104,129 @@ public sealed class GetTextMateCmdlet : PSCmdlet
         WriteObject(TextMateHelper.AvailableLanguages, enumerateCollection: true);
     }
 }
-[Cmdlet(VerbsDiagnostic.Debug, "TextMate")]
+
+[Cmdlet(VerbsDiagnostic.Debug, "TextMate", DefaultParameterSetName = "String")]
 public sealed class DebugTextMateCmdlet : PSCmdlet
 {
-    [Parameter(Mandatory = true, ValueFromPipeline = true)]
-    public string[] InputObject { get; set; } = null!;
-    [Parameter()]
+    private readonly List<string> _inputObjectBuffer = new();
+
+    [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
+    [AllowEmptyString]
+    public string InputObject { get; set; } = null!;
+
+    [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Path", Position = 0)]
+    [ValidateNotNullOrEmpty]
+    [Alias("FullName")]
+    public string Path { get; set; } = null!;
+
+    [Parameter(ParameterSetName = "String")]
     [ValidateSet(typeof(TextMateLanguages))]
     public string Language { get; set; } = "powershell";
 
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.Dark;
-    [Parameter()]
-    public SwitchParameter Tokens { get; set; }
+
+    [Parameter(ParameterSetName = "Path")]
+    [TextMateExtensionTransform()]
+    [ValidateSet(typeof(TextMateExtensions))]
+    [Alias("As")]
+    public string ExtensionOverride { get; set; } = null!;
+    protected override void ProcessRecord()
+    {
+        if (ParameterSetName == "String" && null != InputObject)
+        {
+            _inputObjectBuffer.Add(InputObject);
+        }
+    }
     protected override void EndProcessing()
     {
-        if (Tokens.IsPresent)
+        if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0)
         {
-            var rows = Test.DebugTextMateTokens(InputObject, Theme, Language);
-            WriteObject(rows, true);
-            return;
+            string[] strings = _inputObjectBuffer.ToArray();
+            if (Converter.AllIsNullOrEmpty(strings))
+            {
+                return;
+            }
+            var obj = Test.DebugTextMate(strings, Theme, Language);
+            WriteObject(obj, true);
         }
-        var rows = Test.DebugTextMate(InputObject, Theme, Language);
-        WriteObject(rows, true);
+        else if (ParameterSetName == "Path" && null != Path)
+        {
+            FileInfo Filepath = new(GetUnresolvedProviderPathFromPSPath(Path));
+            if (!Filepath.Exists)
+            {
+                throw new FileNotFoundException("File not found", Filepath.FullName);
+            }
+            string ext = !string.IsNullOrEmpty(ExtensionOverride)
+            ? ExtensionOverride
+            : Filepath.Extension;
+            string[] strings = File.ReadAllLines(Filepath.FullName);
+            var obj = Test.DebugTextMate(strings, Theme, ext, true);
+            WriteObject(obj, true);
+        }
+    }
+}
+
+[Cmdlet(VerbsDiagnostic.Debug, "TextMateTokens", DefaultParameterSetName = "String")]
+public sealed class DebugTextMateTokensCmdlet : PSCmdlet
+{
+    private readonly List<string> _inputObjectBuffer = new();
+
+    [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
+    [AllowEmptyString]
+    public string InputObject { get; set; } = null!;
+
+    [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Path", Position = 0)]
+    [ValidateNotNullOrEmpty]
+    [Alias("FullName")]
+    public string Path { get; set; } = null!;
+
+    [Parameter(ParameterSetName = "String")]
+    [ValidateSet(typeof(TextMateLanguages))]
+    public string Language { get; set; } = "powershell";
+
+    [Parameter()]
+    public ThemeName Theme { get; set; } = ThemeName.Dark;
+
+    [Parameter(ParameterSetName = "Path")]
+    [TextMateExtensionTransform()]
+    [ValidateSet(typeof(TextMateExtensions))]
+    [Alias("As")]
+    public string ExtensionOverride { get; set; } = null!;
+
+    protected override void ProcessRecord()
+    {
+        if (ParameterSetName == "String" && null != InputObject)
+        {
+            _inputObjectBuffer.Add(InputObject);
+        }
+    }
+    protected override void EndProcessing()
+    {
+        if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0)
+        {
+            string[] strings = _inputObjectBuffer.ToArray();
+            if (Converter.AllIsNullOrEmpty(strings))
+            {
+                return;
+            }
+            var obj = Test.DebugTextMateTokens(strings, Theme, Language);
+            WriteObject(obj, true);
+
+        }
+        else if (ParameterSetName == "Path" && null != Path)
+        {
+            FileInfo Filepath = new(GetUnresolvedProviderPathFromPSPath(Path));
+            if (!Filepath.Exists)
+            {
+                throw new FileNotFoundException("File not found", Filepath.FullName);
+            }
+            string ext = !string.IsNullOrEmpty(ExtensionOverride)
+            ? ExtensionOverride
+            : Filepath.Extension;
+            string[] strings = File.ReadAllLines(Filepath.FullName);
+            var obj = Test.DebugTextMateTokens(strings, Theme, ext, true);
+            WriteObject(obj, true);
+        }
     }
 }

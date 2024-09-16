@@ -24,18 +24,26 @@ public class Test
     }
     public class TokenDebug
     {
-        public Style? style { get; set; }
         public string? text { get; set; }
+        public Style? style { get; set; }
     }
-    public static TextMateDebug[]? DebugTextMate(string[] lines, ThemeName themeName, string grammarId)
+
+    public static TextMateDebug[]? DebugTextMate(string[] lines, ThemeName themeName, string grammarId, bool FromFile = false)
     {
         RegistryOptions options = new(themeName);
         Registry registry = new(options);
         Theme theme = registry.GetTheme();
-        IGrammar grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
+        IGrammar grammar = null!;
+        if (FromFile)
+        {
+            grammar = registry.LoadGrammar(options.GetScopeByExtension(grammarId));
+        }
+        else {
+            grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
+        }
         IStateStack? ruleStack = null;
         List<TextMateDebug> debugList = new();
-
+        int lineIndex = 0;
         foreach (string line in lines)
         {
             ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
@@ -47,7 +55,6 @@ public class Test
                     line.Length : token.StartIndex;
                 int endIndex = (token.EndIndex > line.Length) ?
                     line.Length : token.EndIndex;
-
                 int foreground = -1;
                 int background = -1;
                 FontStyle fontStyle = FontStyle.NotSet;
@@ -55,15 +62,13 @@ public class Test
                 {
                     if (foreground == -1 && themeRule.foreground > 0)
                         foreground = themeRule.foreground;
-
                     if (background == -1 && themeRule.background > 0)
                         background = themeRule.background;
-
                     if (fontStyle == FontStyle.NotSet && themeRule.fontStyle > 0)
                         fontStyle = themeRule.fontStyle;
                 }
                 ReadOnlyDictionary<string, string>? colorDictionary = theme.GetGuiColorDictionary();
-                int[] index = { startIndex, endIndex };
+                int[] index = { lineIndex, startIndex, endIndex };
                 int[] color = { foreground, background };
                 TextMateDebug textMateDebug = new() {
                     Index = index,
@@ -75,17 +80,27 @@ public class Test
                 };
                 debugList.Add(textMateDebug);
             }
+            lineIndex++;
         }
         return debugList.ToArray();
     }
-    public static TokenDebug[]? DebugTextMateTokens(string[] lines, ThemeName themeName, string grammarId)
+    public static TokenDebug[]? DebugTextMateTokens(string[] lines, ThemeName themeName, string grammarId, bool FromFile = false)
     {
         RegistryOptions options = new(themeName);
         Registry registry = new(options);
         Theme theme = registry.GetTheme();
-        IGrammar grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
+        IGrammar grammar = null!;
+        if (FromFile)
+        {
+            grammar = registry.LoadGrammar(options.GetScopeByExtension(grammarId));
+        }
+        else
+        {
+            grammar = registry.LoadGrammar(options.GetScopeByLanguageId(grammarId));
+        }
         IStateStack? ruleStack = null;
         List<TokenDebug> tokenDebug = new();
+
         foreach (string line in lines)
         {
             ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
@@ -114,8 +129,8 @@ public class Test
                 }
                 var (textEscaped, style) = Converter.WriteToken(line.SubstringAtIndexes(startIndex, endIndex), foreground, background, fontStyle, theme);
                 TokenDebug tokenDebugItem = new() {
-                    style = style,
-                    text = textEscaped
+                    text = textEscaped,
+                    style = style
                 };
                 tokenDebug.Add(tokenDebugItem);
             }

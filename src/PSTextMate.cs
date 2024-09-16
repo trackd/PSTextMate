@@ -11,7 +11,6 @@ using Spectre.Console.Rendering;
 namespace PwshSpectreConsole.TextMate;
 public class Converter
 {
-
     public static Rows? String(string[] lines, ThemeName themeName, string grammarId)
     {
         RegistryOptions options = new(themeName);
@@ -80,8 +79,9 @@ public class Converter
                             }
                             if (title != null && url != null)
                             {
-                                (string _text, Style _style) =  WriteMarkdownLinkWStyle(url, title);
-                                builder.AppendWithStyleN(_style, _text);
+                                // (string _text, Style _style) =  WriteMarkdownLinkWStyle(url, title);
+                                // builder.AppendWithStyleN(_style, _text);
+                                builder.Append(WriteMarkdownLink(url, title));
                                 title = null;
                                 url = null;
                             }
@@ -178,9 +178,7 @@ public class Converter
     internal static string WriteMarkdownLink(string url, string linkText)
     {
         // string EscapedText = Markup.Escape(linkText);
-        string mdlink = $"[link={url}]{linkText}[/]";
-        // Console.WriteLine(mdlink);
-        return mdlink;
+        return $"[Blue link={url}]{linkText}[/] ";
     }
     internal static (string textEscaped, Style style) WriteMarkdownLinkWStyle(string url, string linkText)
     {

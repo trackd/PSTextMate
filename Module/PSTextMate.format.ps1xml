@@ -63,7 +63,7 @@
             <TableColumnItems>
               <TableColumnItem>
                 <ScriptBlock>
-                    return $_.Index -join '-'
+                  return 'Line {0}, Index {1}' -f $_.Index[0], ($_.Index[1,2] -join '-')
                   </ScriptBlock>
               </TableColumnItem>
               <TableColumnItem>

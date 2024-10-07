@@ -1,6 +1,6 @@
 # PSTextMate
 
-This modules allows you to render files or strings in the console using TextMate.  
+This modules allows you to render content in the console using TextMate.  
 see below table for supported grammars and builtin themes.  
 
 the module is meant to be paired with PwshSpectreConsole.  

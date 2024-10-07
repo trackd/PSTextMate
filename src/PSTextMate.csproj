@@ -1,9 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>PSTextMate</AssemblyName>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>Latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +12,6 @@
       <PackageReference Include="TextMateSharp" Version="1.0.63" />
       <PackageReference Include="TextMateSharp.Grammars" Version="1.0.63" />
       <PackageReference Include="Onigwrap" Version="1.0.7" />
-      <PackageReference Include="System.Management.Automation" Version="7.2.23" PrivateAssets="all" />
+      <PackageReference Include="System.Management.Automation" Version="7.4.5" PrivateAssets="all" />
   </ItemGroup>
 </Project>

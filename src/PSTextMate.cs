@@ -165,7 +165,7 @@ public class Converter
     internal static (string textEscaped, Style? style) WriteToken(string text, int foreground, int background, FontStyle fontStyle, Theme theme)
     {
         string textEscaped = Markup.Escape(text);
-        if (foreground == -1)
+        if (foreground == -1 && background == -1 && fontStyle == FontStyle.NotSet)
         {
             return (textEscaped, null);
         }

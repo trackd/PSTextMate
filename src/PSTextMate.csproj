@@ -12,6 +12,6 @@
       <PackageReference Include="TextMateSharp" Version="1.0.66" />
       <PackageReference Include="TextMateSharp.Grammars" Version="1.0.66" />
       <PackageReference Include="Onigwrap" Version="1.0.7" />
-      <PackageReference Include="System.Management.Automation" Version="7.4.6" PrivateAssets="all" />
+      <PackageReference Include="System.Management.Automation" Version="7.4.7" PrivateAssets="all" />
   </ItemGroup>
 </Project>

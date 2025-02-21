@@ -6,7 +6,7 @@ using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate;
 
-internal class TextMateHelper
+internal static class TextMateHelper
 {
   internal static readonly RegistryOptions _registryOptions = new(ThemeName.Dark);
   internal static List<Language> AvailableLanguages = _registryOptions.GetAvailableLanguages();

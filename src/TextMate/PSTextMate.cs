@@ -9,7 +9,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 
 namespace PwshSpectreConsole.TextMate;
-public class Converter
+public static class Converter
 {
     public static Rows? String(string[] lines, ThemeName themeName, string grammarId)
     {

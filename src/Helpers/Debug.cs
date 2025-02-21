@@ -11,7 +11,7 @@ using System.Collections.ObjectModel;
 
 namespace PwshSpectreConsole.TextMate;
 
-public class Test
+public static class Test
 {
     public class TextMateDebug
     {

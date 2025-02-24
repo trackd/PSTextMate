@@ -15,7 +15,7 @@
     <PackageReference Include="System.Management.Automation" Version="7.4" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Roslynator.Analyzers" Version="4.13.0">
+    <PackageReference Include="Roslynator.Analyzers" Version="4.13.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

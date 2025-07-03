@@ -63,7 +63,7 @@
             <TableColumnItems>
               <TableColumnItem>
                 <ScriptBlock>
-                  return 'Line {0}, Index {1}' -f $_.Index[0], ($_.Index[1,2] -join '-')
+                  return 'Line {0}, Index {1}' -f $_.LineIndex, ($_.StartIndex, $_.EndIndex -join '-')
                   </ScriptBlock>
               </TableColumnItem>
               <TableColumnItem>
@@ -82,7 +82,7 @@
     <View>
       <Name>TextMateDebug</Name>
       <ViewSelectedBy>
-        <TypeName>PwshSpectreConsole.TextMate.Test+TokenDebug</TypeName>
+        <TypeName>PwshSpectreConsole.TextMate.Core.TokenDebugInfo</TypeName>
       </ViewSelectedBy>
       <TableControl>
         <TableHeaders>

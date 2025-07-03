@@ -53,9 +53,16 @@ public static class Test
         return debugList.ToArray();
     }
 
-    public static TextMateDebug[]? DebugTextMateTokens(string[] lines, ThemeName themeName, string grammarId, bool FromFile = false)
+    public static Core.TokenDebugInfo[]? DebugTextMateTokens(string[] lines, ThemeName themeName, string grammarId, bool FromFile = false)
     {
-        // For now, just alias to DebugTextMate for unified debug info
-        return DebugTextMate(lines, themeName, grammarId, FromFile);
+        var debugList = new List<Core.TokenDebugInfo>();
+        PwshSpectreConsole.TextMate.Core.TextMateProcessor.ProcessLines(
+            lines,
+            themeName,
+            grammarId,
+            isExtension: FromFile,
+            debugCallback: info => debugList.Add(info)
+        );
+        return debugList.ToArray();
     }
 }

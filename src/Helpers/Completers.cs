@@ -1,5 +1,6 @@
 ﻿
 using System;
+using System.IO;
 using System.Linq;
 using System.Management.Automation;
 
@@ -27,7 +28,7 @@ public class TextMateExtensions : IValidateSetValuesGenerator
     }
     public static bool IsSupportedFile(string file)
     {
-        return TextMateHelper.Extensions.Contains(System.IO.Path.GetExtension(file));
+        return TextMateHelper.Extensions.Contains(Path.GetExtension(file));
     }
 
 }

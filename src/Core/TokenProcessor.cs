@@ -1,0 +1,113 @@
+using System;
+using System.Text;
+using System.Collections.ObjectModel;
+using Spectre.Console;
+using TextMateSharp.Grammars;
+using TextMateSharp.Model;
+using TextMateSharp.Themes;
+using PwshSpectreConsole.TextMate.Extensions;
+
+namespace PwshSpectreConsole.TextMate.Core;
+
+/// <summary>
+/// Provides optimized token processing and styling operations.
+/// Handles theme property extraction and token rendering with performance optimizations.
+/// </summary>
+internal static class TokenProcessor
+{
+    /// <summary>
+    /// Processes tokens in batches for better cache locality and performance.
+    /// </summary>
+    /// <param name="tokens">Tokens to process</param>
+    /// <param name="line">Source line text</param>
+    /// <param name="theme">Theme for styling</param>
+    /// <param name="builder">StringBuilder for output</param>
+    public static void ProcessTokensBatch(
+        IToken[] tokens,
+        string line,
+        Theme theme,
+        StringBuilder builder,
+        Action<TokenDebugInfo>? debugCallback = null,
+        int? lineIndex = null)
+    {
+        foreach (IToken token in tokens)
+        {
+            int startIndex = Math.Min(token.StartIndex, line.Length);
+            int endIndex = Math.Min(token.EndIndex, line.Length);
+
+            if (startIndex >= endIndex) continue;
+
+            var textSpan = line.SubstringAsSpan(startIndex, endIndex);
+            var (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
+            var (escapedText, style) = WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme);
+
+            builder.AppendWithStyle(style, escapedText);
+
+            debugCallback?.Invoke(new TokenDebugInfo
+            {
+                LineIndex = lineIndex,
+                StartIndex = startIndex,
+                EndIndex = endIndex,
+                Text = line.SubstringAtIndexes(startIndex, endIndex),
+                Scopes = token.Scopes,
+                Foreground = foreground,
+                Background = background,
+                FontStyle = fontStyle,
+                Style = style,
+                Theme = theme.GetGuiColorDictionary()
+            });
+        }
+    }
+
+    /// <summary>
+    /// Optimized token writing with reduced allocations and better performance.
+    /// </summary>
+    /// <param name="text">Text span to process</param>
+    /// <param name="foreground">Foreground color ID</param>
+    /// <param name="background">Background color ID</param>
+    /// <param name="fontStyle">Font style</param>
+
+    public static (int foreground, int background, FontStyle fontStyle) ExtractThemeProperties(IToken token, Theme theme)
+    {
+        int foreground = -1;
+        int background = -1;
+        FontStyle fontStyle = FontStyle.NotSet;
+
+        foreach (var themeRule in theme.Match(token.Scopes))
+        {
+            if (foreground == -1 && themeRule.foreground > 0)
+                foreground = themeRule.foreground;
+            if (background == -1 && themeRule.background > 0)
+                background = themeRule.background;
+            if (fontStyle == FontStyle.NotSet && themeRule.fontStyle > 0)
+                fontStyle = themeRule.fontStyle;
+        }
+
+        return (foreground, background, fontStyle);
+    }
+    /// <param name="theme">Theme for color resolution</param>
+    /// <returns>Tuple of escaped text and style</returns>
+    public static (string escapedText, Style? style) WriteTokenOptimized(
+        ReadOnlySpan<char> text,
+        int foreground,
+        int background,
+        FontStyle fontStyle,
+        Theme theme)
+    {
+        string escapedText = Markup.Escape(text.ToString());
+
+        // Early return for no styling needed
+        if (foreground == -1 && background == -1 && fontStyle == FontStyle.NotSet)
+        {
+            return (escapedText, null);
+        }
+
+        Decoration decoration = StyleHelper.GetDecoration(fontStyle);
+        Color backgroundColor = StyleHelper.GetColor(background, theme);
+        Color foregroundColor = StyleHelper.GetColor(foreground, theme);
+        Style style = new(foregroundColor, backgroundColor, decoration);
+
+        return (escapedText, style);
+    }
+
+}

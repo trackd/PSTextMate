@@ -3,16 +3,20 @@
     <AssemblyName>PSTextMate</AssemblyName>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <LangVersion>Latest</LangVersion>
+    <Version>0.1.0</Version>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>13.0</LangVersion>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Spectre.Console" Version="0.50.0" PrivateAssets="all" />
-    <PackageReference Include="TextMateSharp" Version="1.0.66" />
-    <PackageReference Include="TextMateSharp.Grammars" Version="1.0.66" />
+    <PackageReference Include="TextMateSharp" Version="1.0.69" />
+    <PackageReference Include="TextMateSharp.Grammars" Version="1.0.69" />
     <PackageReference Include="Onigwrap" Version="1.0.8" />
     <PackageReference Include="System.Management.Automation" Version="7.4" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Roslynator.Analyzers" Version="4.13.1">

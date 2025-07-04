@@ -60,6 +60,53 @@ internal static class TokenProcessor
     }
 
     /// <summary>
+    /// Processes tokens from TextMate grammar tokenization without escaping markup.
+    /// Used for code blocks where we want to preserve raw content.
+    /// </summary>
+    /// <param name="tokens">Tokens to process</param>
+    /// <param name="line">Source line text</param>
+    /// <param name="theme">Theme for color resolution</param>
+    /// <param name="builder">StringBuilder to append styled text to</param>
+    /// <param name="debugCallback">Optional callback for debugging token information</param>
+    /// <param name="lineIndex">Line index for debugging context</param>
+    public static void ProcessTokensBatchNoEscape(
+        IToken[] tokens,
+        string line,
+        Theme theme,
+        StringBuilder builder,
+        Action<TokenDebugInfo>? debugCallback = null,
+        int? lineIndex = null)
+    {
+        foreach (IToken token in tokens)
+        {
+            int startIndex = Math.Min(token.StartIndex, line.Length);
+            int endIndex = Math.Min(token.EndIndex, line.Length);
+
+            if (startIndex >= endIndex) continue;
+
+            var textSpan = line.SubstringAsSpan(startIndex, endIndex);
+            var (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
+            var (processedText, style) = WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme, escapeMarkup: false);
+
+            builder.AppendWithStyle(style, processedText);
+
+            debugCallback?.Invoke(new TokenDebugInfo
+            {
+                LineIndex = lineIndex,
+                StartIndex = startIndex,
+                EndIndex = endIndex,
+                Text = line.SubstringAtIndexes(startIndex, endIndex),
+                Scopes = token.Scopes,
+                Foreground = foreground,
+                Background = background,
+                FontStyle = fontStyle,
+                Style = style,
+                Theme = theme.GetGuiColorDictionary()
+            });
+        }
+    }
+
+    /// <summary>
     /// Optimized token writing with reduced allocations and better performance.
     /// </summary>
     /// <param name="text">Text span to process</param>
@@ -86,20 +133,22 @@ internal static class TokenProcessor
         return (foreground, background, fontStyle);
     }
     /// <param name="theme">Theme for color resolution</param>
+    /// <param name="escapeMarkup">Whether to escape markup characters for Spectre.Console</param>
     /// <returns>Tuple of escaped text and style</returns>
     public static (string escapedText, Style? style) WriteTokenOptimized(
         ReadOnlySpan<char> text,
         int foreground,
         int background,
         FontStyle fontStyle,
-        Theme theme)
+        Theme theme,
+        bool escapeMarkup = true)
     {
-        string escapedText = Markup.Escape(text.ToString());
+        string processedText = escapeMarkup ? Markup.Escape(text.ToString()) : text.ToString();
 
         // Early return for no styling needed
         if (foreground == -1 && background == -1 && fontStyle == FontStyle.NotSet)
         {
-            return (escapedText, null);
+            return (processedText, null);
         }
 
         Decoration decoration = StyleHelper.GetDecoration(fontStyle);
@@ -107,7 +156,7 @@ internal static class TokenProcessor
         Color foregroundColor = StyleHelper.GetColor(foreground, theme);
         Style style = new(foregroundColor, backgroundColor, decoration);
 
-        return (escapedText, style);
+        return (processedText, style);
     }
 
 }

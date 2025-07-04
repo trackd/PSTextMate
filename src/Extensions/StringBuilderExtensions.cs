@@ -35,7 +35,7 @@ public static class StringBuilderExtensions
     public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, string? value)
     {
         value ??= string.Empty;
-        if (style != null)
+        if (style is not null)
         {
             return builder.Append('[')
                 .Append(style.ToMarkup())
@@ -49,7 +49,7 @@ public static class StringBuilderExtensions
     public static StringBuilder AppendWithStyleN(this StringBuilder builder, Style? style, string? value)
     {
         value ??= string.Empty;
-        if (style != null)
+        if (style is not null)
         {
             return builder.Append('[')
                 .Append(style.ToMarkup())
@@ -70,7 +70,7 @@ public static class StringBuilderExtensions
     /// <returns>The same StringBuilder for method chaining</returns>
     public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, ReadOnlySpan<char> value)
     {
-        if (style != null)
+        if (style is not null)
         {
             return builder.Append('[')
                 .Append(style.ToMarkup())

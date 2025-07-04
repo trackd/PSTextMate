@@ -104,7 +104,7 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
     public string Language { get; set; } = "powershell";
 
     [Parameter()]
-    public ThemeName Theme { get; set; } = ThemeName.Dark;
+    public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
 
     [Parameter(ParameterSetName = "Path")]
     [TextMateExtensionTransform()]

@@ -1,7 +1,6 @@
 using System;
 using System.Text;
 using System.Collections.Generic;
-using Microsoft.Extensions.ObjectPool;
 using PwshSpectreConsole.TextMate.Infrastructure;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
@@ -67,7 +66,7 @@ public static class TextMateProcessor
 
             // Use optimized rendering based on grammar type
             return grammar.GetName() == "Markdown"
-                ? MarkdownRenderer.Render(lines, theme, grammar, debugCallback)
+                ? MarkdownRenderer.Render(lines, theme, grammar, themeName, debugCallback)
                 : StandardRenderer.Render(lines, theme, grammar, debugCallback);
         }
         catch (InvalidOperationException)
@@ -84,5 +83,69 @@ public static class TextMateProcessor
         }
     }
 
-    // ...existing code...
+    /// <summary>
+    /// Processes string lines for code blocks without escaping markup characters.
+    /// This preserves raw source code content for proper syntax highlighting.
+    /// </summary>
+    /// <param name="lines">Array of text lines to process</param>
+    /// <param name="themeName">Theme to apply for styling</param>
+    /// <param name="grammarId">Language ID or file extension for grammar selection</param>
+    /// <param name="isExtension">True if grammarId is a file extension, false if it's a language ID</param>
+    /// <returns>Rendered rows with syntax highlighting, or null if processing fails</returns>
+    public static Rows? ProcessLinesCodeBlock(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false)
+    {
+        ArgumentNullException.ThrowIfNull(lines, nameof(lines));
+
+        try
+        {
+            var (registry, theme) = CacheManager.GetCachedTheme(themeName);
+            IGrammar? grammar = CacheManager.GetCachedGrammar(registry, grammarId, isExtension);
+
+            if (grammar is null)
+            {
+                string errorMessage = isExtension
+                    ? $"Grammar not found for file extension: {grammarId}"
+                    : $"Grammar not found for language: {grammarId}";
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            // Always use StandardRenderer for code blocks, never MarkdownRenderer
+            return RenderCodeBlock(lines, theme, grammar);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidOperationException($"Argument error processing code block with grammar '{grammarId}': {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Unexpected error processing code block with grammar '{grammarId}': {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Renders code block lines without escaping markup characters.
+    /// </summary>
+    private static Rows RenderCodeBlock(string[] lines, Theme theme, IGrammar grammar)
+    {
+        var builder = new StringBuilder();
+        List<IRenderable> rows = new(lines.Length);
+        IStateStack? ruleStack = null;
+
+        for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+        {
+            string line = lines[lineIndex];
+            ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
+            ruleStack = result.RuleStack;
+            TokenProcessor.ProcessTokensBatchNoEscape(result.Tokens, line, theme, builder, null, lineIndex);
+            var lineMarkup = builder.ToString();
+            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
+            builder.Clear();
+        }
+
+        return new Rows(rows.ToArray());
+    }
 }

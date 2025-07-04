@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Microsoft.Extensions.ObjectPool;
 using TextMateSharp.Grammars;
 using TextMateSharp.Model;
 using TextMateSharp.Registry;
@@ -62,19 +61,4 @@ internal static class CacheManager
         _themeCache.Clear();
         _grammarCache.Clear();
     }
-}
-
-/// <summary>
-/// Provides object pooling for frequently allocated objects to reduce GC pressure.
-/// StringBuilder instances are particularly expensive to allocate repeatedly.
-/// </summary>
-internal static class PoolManager
-{
-    private static readonly DefaultObjectPoolProvider _provider = new();
-
-    /// <summary>
-    /// Object pool for StringBuilder instances used in token rendering.
-    /// Reduces allocation overhead during intensive text processing operations.
-    /// </summary>
-    public static ObjectPool<StringBuilder> StringBuilderPool { get; } = _provider.CreateStringBuilderPool();
 }

@@ -1,12 +1,19 @@
 if (-Not $PSScriptRoot) {
     return 'Run this script from the root of the project'
 }
+$ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 
 dotnet clean
 dotnet restore
 
-$moduleLibFolder = Join-Path $PSScriptRoot 'Module' 'lib'
+$ModuleFilesFolder = Join-Path $PSScriptRoot 'Module'
+if (-Not (Test-Path $ModuleFilesFolder)) {
+    $null = New-Item -ItemType Directory -Path $ModuleFilesFolder -Force
+}
+Get-ChildItem -Path (Join-Path $PSScriptRoot 'Output') -File -Recurse | Remove-Item -Force
+
+$moduleLibFolder = Join-Path $PSScriptRoot 'Output' 'lib'
 if (-Not (Test-Path $moduleLibFolder)) {
     $null = New-Item -ItemType Directory -Path $moduleLibFolder -Force
 }
@@ -16,7 +23,9 @@ $outputfolder = Join-Path $PSScriptRoot 'packages'
 if (-Not (Test-Path -Path $outputfolder)) {
     $null = New-Item -ItemType Directory -Path $outputfolder -Force
 }
+
 dotnet publish $csproj.FullName -c Release -o $outputfolder
+Copy-Item -Path $ModuleFilesFolder/* -Destination (Join-Path $PSScriptRoot 'Output') -Force -Recurse -Include '*.psd1', '*.psm1', '*.ps1xml'
 
 Get-ChildItem -Path $moduleLibFolder -File | Remove-Item -Force
 

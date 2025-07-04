@@ -1,7 +1,6 @@
 using System;
 using System.Text;
 using System.Collections.Generic;
-using Microsoft.Extensions.ObjectPool;
 using PwshSpectreConsole.TextMate.Infrastructure;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -32,27 +31,24 @@ internal static class StandardRenderer
 
     public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
     {
-        var builder = PoolManager.StringBuilderPool.Get();
+        var builder = new StringBuilder();
         List<IRenderable> rows = new(lines.Length);
 
         try
         {
-            IStateStack? ruleStack = null;
+        IStateStack? ruleStack = null;
+        for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+        {
+            string line = lines[lineIndex];
+            ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
+            ruleStack = result.RuleStack;
+            TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback, lineIndex);
+            var lineMarkup = builder.ToString();
+            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
+            builder.Clear();
+        }
 
-            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
-            {
-                string line = lines[lineIndex];
-                ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
-                ruleStack = result.RuleStack;
-
-                TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback, lineIndex);
-
-                var lineMarkup = builder.ToString();
-                rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
-                builder.Clear();
-            }
-
-            return new Rows(rows.ToArray());
+        return new Rows(rows.ToArray());
         }
         catch (ArgumentException ex)
         {
@@ -61,10 +57,6 @@ internal static class StandardRenderer
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Unexpected error rendering content: {ex.Message}", ex);
-        }
-        finally
-        {
-            PoolManager.StringBuilderPool.Return(builder);
         }
     }
 }

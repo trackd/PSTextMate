@@ -24,11 +24,12 @@ public class TextMateExtensions : IValidateSetValuesGenerator
     }
     public static bool IsSupportedExtension(string extension)
     {
-        return TextMateHelper.Extensions.Contains(extension);
+        return TextMateHelper.Extensions is not null && TextMateHelper.Extensions.Contains(extension);
     }
     public static bool IsSupportedFile(string file)
     {
-        return TextMateHelper.Extensions.Contains(Path.GetExtension(file));
+        var ext = Path.GetExtension(file);
+        return TextMateHelper.Extensions is not null && TextMateHelper.Extensions.Contains(ext);
     }
 
 }
@@ -40,7 +41,7 @@ public class TextMateExtensionTransform : ArgumentTransformationAttribute
         {
             return input.StartsWith('.') ? input : '.' + input;
         }
-        return inputData;
+        throw new ArgumentException("Input must be a string representing a file extension., '.ext' format expected.", nameof(inputData));
     }
 
 }

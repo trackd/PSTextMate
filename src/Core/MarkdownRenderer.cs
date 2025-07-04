@@ -1,7 +1,6 @@
 using System;
 using System.Text;
 using System.Collections.Generic;
-using Microsoft.Extensions.ObjectPool;
 using PwshSpectreConsole.TextMate.Infrastructure;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
@@ -28,12 +27,12 @@ internal static class MarkdownRenderer
     // Set this to true to use the new Markdig renderer, false for the legacy renderer
     public static bool UseMarkdigRenderer { get; set; } = true;
 
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar)
+    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName)
     {
         if (UseMarkdigRenderer)
         {
             string markdown = string.Join("\n", lines);
-            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme);
+            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
         }
         else
         {
@@ -41,12 +40,12 @@ internal static class MarkdownRenderer
         }
     }
 
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
+    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName, Action<TokenDebugInfo>? debugCallback)
     {
         if (UseMarkdigRenderer)
         {
             string markdown = string.Join("\n", lines);
-            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme);
+            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
         }
         else
         {
@@ -57,47 +56,27 @@ internal static class MarkdownRenderer
     // The original legacy renderer logic
     private static Rows RenderLegacy(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
     {
-        var builder = PoolManager.StringBuilderPool.Get();
+        var builder = new StringBuilder();
         List<IRenderable> rows = new(lines.Length);
 
-        try
+        IStateStack? ruleStack = null;
+        for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
         {
-            IStateStack? ruleStack = null;
-
-            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            string line = lines[lineIndex];
+            ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
+            ruleStack = result.RuleStack;
+            ProcessMarkdownTokens(result.Tokens, line, theme, builder);
+            debugCallback?.Invoke(new TokenDebugInfo
             {
-                string line = lines[lineIndex];
-                ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
-                ruleStack = result.RuleStack;
-
-                ProcessMarkdownTokens(result.Tokens, line, theme, builder);
-
-                debugCallback?.Invoke(new TokenDebugInfo
-                {
-                    LineIndex = lineIndex,
-                    Text = line,
-                    // You can add more fields if you refactor ProcessMarkdownTokens
-                });
-
-                var lineMarkup = builder.ToString();
-                rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
-                builder.Clear();
-            }
-
-            return new Rows(rows.ToArray());
+                LineIndex = lineIndex,
+                Text = line,
+                // You can add more fields if you refactor ProcessMarkdownTokens
+            });
+            var lineMarkup = builder.ToString();
+            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
+            builder.Clear();
         }
-        catch (ArgumentException ex)
-        {
-            throw new InvalidOperationException($"Argument error rendering markdown content: {ex.Message}", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Unexpected error rendering markdown content: {ex.Message}", ex);
-        }
-        finally
-        {
-            PoolManager.StringBuilderPool.Return(builder);
-        }
+        return new Rows(rows.ToArray());
     }
 
     /// <summary>

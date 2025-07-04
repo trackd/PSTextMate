@@ -9,7 +9,7 @@
     CompatiblePSEditions = 'Core'
     CmdletsToExport      = 'Show-TextMate', 'Test-SupportedTextMate', 'Get-SupportedTextMate', 'Debug-TextMate', 'Debug-TextMateTokens'
     AliasesToExport      = '*'
-    RequiredAssemblies   = './lib/TextMateSharp.dll', './lib/TextMateSharp.Grammars.dll', './lib/Onigwrap.dll'
+    RequiredAssemblies   = './lib/TextMateSharp.dll', './lib/TextMateSharp.Grammars.dll', './lib/Onigwrap.dll', 'Markdig.Signed.dll'
     FormatsToProcess     = 'PSTextMate.format.ps1xml'
     RequiredModules      = @(
         @{

@@ -11,6 +11,22 @@ namespace PwshSpectreConsole.TextMate.Extensions;
 /// </summary>
 public static class StringBuilderExtensions
 {
+    /// <summary>
+    /// Appends a Spectre.Console link markup: [link=url]text[/]
+    /// </summary>
+    /// <param name="builder">StringBuilder to append to</param>
+    /// <param name="url">The URL for the link</param>
+    /// <param name="text">The link text</param>
+    /// <returns>The same StringBuilder for method chaining</returns>
+    public static StringBuilder AppendLink(this StringBuilder builder, string url, string text)
+    {
+        builder.Append("[link=")
+               .Append(url.EscapeMarkup())
+               .Append(']')
+               .Append(text.EscapeMarkup())
+               .Append("[/]");
+        return builder;
+    }
     public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, int? value)
     {
         return AppendWithStyle(builder, style, value?.ToString(CultureInfo.InvariantCulture));

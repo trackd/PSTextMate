@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Markdig.Signed" Version="0.41.3" PrivateAssets="all" />
     <PackageReference Include="Spectre.Console" Version="0.50.0" PrivateAssets="all" />
     <PackageReference Include="TextMateSharp" Version="1.0.69" />
     <PackageReference Include="TextMateSharp.Grammars" Version="1.0.69" />

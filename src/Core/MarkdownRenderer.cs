@@ -25,12 +25,37 @@ internal static class MarkdownRenderer
     /// <param name="theme">Theme to apply</param>
     /// <param name="grammar">Markdown grammar</param>
     /// <returns>Rendered rows with markdown syntax highlighting</returns>
+    // Set this to true to use the new Markdig renderer, false for the legacy renderer
+    public static bool UseMarkdigRenderer { get; set; } = true;
+
     public static Rows Render(string[] lines, Theme theme, IGrammar grammar)
     {
-        return Render(lines, theme, grammar, null);
+        if (UseMarkdigRenderer)
+        {
+            string markdown = string.Join("\n", lines);
+            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme);
+        }
+        else
+        {
+            return RenderLegacy(lines, theme, grammar, null);
+        }
     }
 
     public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
+    {
+        if (UseMarkdigRenderer)
+        {
+            string markdown = string.Join("\n", lines);
+            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme);
+        }
+        else
+        {
+            return RenderLegacy(lines, theme, grammar, debugCallback);
+        }
+    }
+
+    // The original legacy renderer logic
+    private static Rows RenderLegacy(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
     {
         var builder = PoolManager.StringBuilderPool.Get();
         List<IRenderable> rows = new(lines.Length);
@@ -45,7 +70,6 @@ internal static class MarkdownRenderer
                 ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
                 ruleStack = result.RuleStack;
 
-                // For markdown, you may want to add a similar debugCallback to ProcessMarkdownTokens if needed
                 ProcessMarkdownTokens(result.Tokens, line, theme, builder);
 
                 debugCallback?.Invoke(new TokenDebugInfo

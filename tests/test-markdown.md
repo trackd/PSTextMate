@@ -48,6 +48,9 @@ This is a new paragraph after a blank line.
    1. Nested ordered item
 3. Ordered item 3
 
+- [x] Completed task
+- [ ] Incomplete task
+
 ---
 
 ## Blockquote
@@ -101,19 +104,11 @@ public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? s
 
 ## Images
 
-![Alt text](https://via.placeholder.com/100x50.png)
+![xkcd git](../assets/git_commit.png)
 
 ---
 
 ## Horizontal Rule
-
----
-
-## Task List
-
-- [x] Task 1
-- [ ] Task 2
-- [ ] Task 3
 
 ---
 
@@ -125,8 +120,8 @@ public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? s
 
 ## Escaped Characters
 
-\*This is not italic\*
-\# Not a heading
+\*This is not italic\*  
+\# Not a heading  
 
 ---
 

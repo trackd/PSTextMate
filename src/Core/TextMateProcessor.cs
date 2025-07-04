@@ -1,13 +1,9 @@
-using System;
 using System.Text;
-using System.Collections.Generic;
 using PwshSpectreConsole.TextMate.Infrastructure;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
-using TextMateSharp.Model;
-using TextMateSharp.Registry;
 using TextMateSharp.Themes;
 
 namespace PwshSpectreConsole.TextMate.Core;

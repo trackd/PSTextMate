@@ -1,8 +1,4 @@
-﻿
-using System;
-using System.IO;
-using System.Linq;
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PwshSpectreConsole.TextMate;
 public class TextMateLanguages : IValidateSetValuesGenerator
@@ -24,12 +20,12 @@ public class TextMateExtensions : IValidateSetValuesGenerator
     }
     public static bool IsSupportedExtension(string extension)
     {
-        return TextMateHelper.Extensions is not null && TextMateHelper.Extensions.Contains(extension);
+        return TextMateHelper.Extensions?.Contains(extension) == true;
     }
     public static bool IsSupportedFile(string file)
     {
         var ext = Path.GetExtension(file);
-        return TextMateHelper.Extensions is not null && TextMateHelper.Extensions.Contains(ext);
+        return TextMateHelper.Extensions?.Contains(ext) == true;
     }
 
 }

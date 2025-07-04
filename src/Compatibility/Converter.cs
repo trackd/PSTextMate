@@ -1,4 +1,3 @@
-using System;
 using PwshSpectreConsole.TextMate.Core;
 using Spectre.Console;
 using TextMateSharp.Grammars;

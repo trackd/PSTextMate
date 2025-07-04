@@ -1,12 +1,8 @@
 ﻿
-using System;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
-using TextMateSharp.Registry;
 using Spectre.Console;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using PwshSpectreConsole.TextMate.Extensions;
 
 // this is just for debugging purposes.
 

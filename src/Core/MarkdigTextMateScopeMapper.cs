@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace PwshSpectreConsole.TextMate.Core;
 
 /// <summary>
@@ -47,7 +44,7 @@ internal static class MarkdigTextMateScopeMapper
             return BlockScopeMap[$"Heading{headingLevel}"];
         if (BlockScopeMap.TryGetValue(blockType, out var scopes))
             return scopes;
-        return new[] { "text.plain" };
+        return ["text.plain"];
     }
 
     public static string[] GetInlineScopes(string inlineType, int emphasisLevel = 0)
@@ -59,11 +56,11 @@ internal static class MarkdigTextMateScopeMapper
                 1 => InlineScopeMap["EmphasisItalic"],
                 2 => InlineScopeMap["EmphasisBold"],
                 3 => InlineScopeMap["EmphasisBoldItalic"],
-                _ => new[] { "text.plain" }
+                _ => ["text.plain"]
             };
         }
         if (InlineScopeMap.TryGetValue(inlineType, out var scopes))
             return scopes;
-        return new[] { "text.plain" };
+        return ["text.plain"];
     }
 }

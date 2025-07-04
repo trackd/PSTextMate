@@ -1,6 +1,4 @@
 using TextMateSharp.Grammars;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace PwshSpectreConsole.TextMate.Core;
 
@@ -17,6 +15,6 @@ internal sealed class MarkdownToken : IToken
 
     public MarkdownToken(IEnumerable<string> scopes)
     {
-        Scopes = scopes.ToList();
+        Scopes = [.. scopes];
     }
 }

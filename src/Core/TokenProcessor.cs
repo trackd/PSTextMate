@@ -1,9 +1,6 @@
-using System;
 using System.Text;
-using System.Collections.ObjectModel;
 using Spectre.Console;
 using TextMateSharp.Grammars;
-using TextMateSharp.Model;
 using TextMateSharp.Themes;
 using PwshSpectreConsole.TextMate.Extensions;
 
@@ -106,14 +103,6 @@ internal static class TokenProcessor
         }
     }
 
-    /// <summary>
-    /// Optimized token writing with reduced allocations and better performance.
-    /// </summary>
-    /// <param name="text">Text span to process</param>
-    /// <param name="foreground">Foreground color ID</param>
-    /// <param name="background">Background color ID</param>
-    /// <param name="fontStyle">Font style</param>
-
     public static (int foreground, int background, FontStyle fontStyle) ExtractThemeProperties(IToken token, Theme theme)
     {
         int foreground = -1;
@@ -132,9 +121,6 @@ internal static class TokenProcessor
 
         return (foreground, background, fontStyle);
     }
-    /// <param name="theme">Theme for color resolution</param>
-    /// <param name="escapeMarkup">Whether to escape markup characters for Spectre.Console</param>
-    /// <returns>Tuple of escaped text and style</returns>
     public static (string escapedText, Style? style) WriteTokenOptimized(
         ReadOnlySpan<char> text,
         int foreground,

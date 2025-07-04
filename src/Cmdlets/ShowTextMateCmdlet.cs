@@ -1,5 +1,3 @@
-using System.IO;
-using System.Collections.Generic;
 using System.Management.Automation;
 using TextMateSharp.Grammars;
 using PwshSpectreConsole.TextMate.Extensions;
@@ -13,34 +11,47 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
 [Alias("st")]
-[OutputType(typeof(Spectre.Console.Rows))]
+[OutputType(typeof(Rows))]
 public sealed class ShowTextMateCmdlet : PSCmdlet
 {
-    private static readonly string[] NewLineSplit = new[] { "\r\n", "\n", "\r" };
-    private readonly List<string> _inputObjectBuffer = new();
+    private static readonly string[] NewLineSplit = ["\r\n", "\n", "\r"];
+    private readonly List<string> _inputObjectBuffer = [];
 
-    [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
+    [Parameter(
+        Mandatory = true,
+        ValueFromPipeline = true,
+        ParameterSetName = "String"
+    )]
     [AllowEmptyString]
     [ValidateNotNull]
-    public object InputObject { get; set; } = null!;
+    public object? InputObject { get; set; }
 
-    [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Path", Position = 0)]
+    [Parameter(
+        Mandatory = true,
+        ValueFromPipelineByPropertyName = true,
+        ParameterSetName = "Path",
+        Position = 0
+    )]
     [ValidateNotNullOrEmpty]
     [Alias("FullName")]
-    public string Path { get; set; } = null!;
+    public string? Path { get; set; }
 
-    [Parameter(ParameterSetName = "String")]
+    [Parameter(
+        ParameterSetName = "String"
+    )]
     [ValidateSet(typeof(TextMateLanguages))]
-    public string Language { get; set; } = "powershell";
+    public string? Language { get; set; } = "powershell";
 
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
 
-    [Parameter(ParameterSetName = "Path")]
+    [Parameter(
+        ParameterSetName = "Path"
+    )]
     [TextMateExtensionTransform()]
     [ValidateSet(typeof(TextMateExtensions))]
     [Alias("As")]
-    public string ExtensionOverride { get; set; } = null!;
+    public string? ExtensionOverride { get; set; }
 
     [Parameter]
     public SwitchParameter PassThru { get; set; }
@@ -48,7 +59,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     protected override void BeginProcessing()
     {
         // Validate language support early
-        if (ParameterSetName == "String" && !TextMateLanguages.IsSupportedLanguage(Language))
+        if (ParameterSetName == "String" && !TextMateLanguages.IsSupportedLanguage(Language!))
         {
             WriteWarning($"Language '{Language}' may not be fully supported. Use Get-SupportedTextMate to see available languages.");
         }
@@ -129,7 +140,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
             return null;
         }
 
-        return Converter.ProcessLines(strings, Theme, Language, isExtension: false);
+        return Converter.ProcessLines(strings, Theme, Language ?? "powershell", isExtension: false);
     }
 
     private Rows? ProcessPathInput()

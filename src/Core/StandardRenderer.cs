@@ -1,11 +1,7 @@
-using System;
 using System.Text;
-using System.Collections.Generic;
-using PwshSpectreConsole.TextMate.Infrastructure;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
-using TextMateSharp.Model;
 using TextMateSharp.Themes;
 
 namespace PwshSpectreConsole.TextMate.Core;
@@ -48,7 +44,7 @@ internal static class StandardRenderer
             builder.Clear();
         }
 
-        return new Rows(rows.ToArray());
+        return new Rows([.. rows]);
         }
         catch (ArgumentException ex)
         {

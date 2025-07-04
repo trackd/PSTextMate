@@ -1,7 +1,4 @@
-using System;
 using System.Text;
-using System.Collections.Generic;
-using PwshSpectreConsole.TextMate.Infrastructure;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -17,6 +14,8 @@ namespace PwshSpectreConsole.TextMate.Core;
 /// </summary>
 internal static class MarkdownRenderer
 {
+
+    public static bool UseMarkdigRenderer { get; set; } = true;
     /// <summary>
     /// Renders Markdown content with special handling for links and enhanced formatting.
     /// </summary>
@@ -25,8 +24,6 @@ internal static class MarkdownRenderer
     /// <param name="grammar">Markdown grammar</param>
     /// <returns>Rendered rows with markdown syntax highlighting</returns>
     // Set this to true to use the new Markdig renderer, false for the legacy renderer
-    public static bool UseMarkdigRenderer { get; set; } = true;
-
     public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName)
     {
         if (UseMarkdigRenderer)

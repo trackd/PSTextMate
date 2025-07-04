@@ -1,8 +1,4 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using TextMateSharp.Grammars;
+﻿using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate;
 
@@ -11,24 +7,21 @@ public static class TextMateHelper
     public static readonly string[] Extensions;
     public static readonly string[] Languages;
     public static readonly List<Language> AvailableLanguages;
-
     static TextMateHelper()
     {
         try
         {
-            RegistryOptions _registryOptions = new(ThemeName.Dark);
+            RegistryOptions _registryOptions = new(ThemeName.DarkPlus);
             AvailableLanguages = _registryOptions.GetAvailableLanguages();
 
             // Get all the extensions and languages from the available languages
-            Extensions = AvailableLanguages
+            Extensions = [.. AvailableLanguages
                 .Where(x => x.Extensions != null)
-                .SelectMany(x => x.Extensions)
-                .ToArray();
+                .SelectMany(x => x.Extensions)];
 
-            Languages = AvailableLanguages
+            Languages = [.. AvailableLanguages
                 .Where(x => x.Id != null)
-                .Select(x => x.Id)
-                .ToArray();
+                .Select(x => x.Id)];
         }
         catch (Exception ex)
         {

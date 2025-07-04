@@ -1,9 +1,7 @@
 using System.Collections.Concurrent;
 using TextMateSharp.Grammars;
-using TextMateSharp.Model;
 using TextMateSharp.Registry;
 using TextMateSharp.Themes;
-using System.Text;
 
 namespace PwshSpectreConsole.TextMate.Infrastructure;
 

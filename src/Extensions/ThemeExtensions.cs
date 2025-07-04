@@ -1,14 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Spectre.Console;
+﻿using Spectre.Console;
 using PwshSpectreConsole.TextMate.Core;
-using PwshSpectreConsole.TextMate.Extensions;
-using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
-using TextMateSharp.Registry;
 
 namespace PwshSpectreConsole.TextMate.Extensions;
 public static class ThemeExtensions

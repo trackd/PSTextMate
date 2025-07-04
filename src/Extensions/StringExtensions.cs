@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-
 namespace PwshSpectreConsole.TextMate.Extensions;
 
 /// <summary>

@@ -12,7 +12,7 @@
     <PackageReference Include="TextMateSharp" Version="1.0.66" />
     <PackageReference Include="TextMateSharp.Grammars" Version="1.0.66" />
     <PackageReference Include="Onigwrap" Version="1.0.8" />
-    <PackageReference Include="System.Management.Automation" Version="7.4" PrivateAssets="all" />
+    <PackageReference Include="System.Management.Automation" Version="7.4.6" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Roslynator.Analyzers" Version="4.13.1">

@@ -2,6 +2,7 @@ using System.Management.Automation;
 using TextMateSharp.Grammars;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
+using PwshSpectreConsole.TextMate;
 
 namespace PwshSpectreConsole.TextMate.Cmdlets;
 
@@ -16,6 +17,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
 {
     private static readonly string[] NewLineSplit = ["\r\n", "\n", "\r"];
     private readonly List<string> _inputObjectBuffer = [];
+    private string? _sourceExtensionHint;
 
     [Parameter(
         Mandatory = true,
@@ -24,7 +26,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     )]
     [AllowEmptyString]
     [ValidateNotNull]
-    public object? InputObject { get; set; }
+    public string? InputObject { get; set; }
 
     [Parameter(
         Mandatory = true,
@@ -39,78 +41,85 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     [Parameter(
         ParameterSetName = "String"
     )]
-    [ValidateSet(typeof(TextMateLanguages))]
-    public string? Language { get; set; } = "powershell";
+    [Parameter(
+        ParameterSetName = "Path"
+    )]
+    [ArgumentCompleter(typeof(LanguageCompleter))]
+    public string? Language { get; set; }
 
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
 
-    [Parameter(
-        ParameterSetName = "Path"
-    )]
-    [TextMateExtensionTransform()]
-    [ValidateSet(typeof(TextMateExtensions))]
-    [Alias("As")]
-    public string? ExtensionOverride { get; set; }
-
     [Parameter]
     public SwitchParameter PassThru { get; set; }
-
-    protected override void BeginProcessing()
-    {
-        // Validate language support early
-        if (ParameterSetName == "String" && !TextMateLanguages.IsSupportedLanguage(Language!))
-        {
-            WriteWarning($"Language '{Language}' may not be fully supported. Use Get-SupportedTextMate to see available languages.");
-        }
-    }
 
     protected override void ProcessRecord()
     {
         if (ParameterSetName == "String" && InputObject is not null)
         {
-            object baseObj = InputObject;
-            // Unwrap PSObject if needed
-            if (baseObj is PSObject pso)
+            // Try to capture an extension hint from ETS note properties on the current pipeline object
+            // (e.g., PSChildName/PSPath added by Get-Content)
+            if (_sourceExtensionHint is null)
             {
-                baseObj = pso.BaseObject;
+                if (GetVariableValue("_") is PSObject current)
+                {
+                    string? hint = current.Properties["PSChildName"]?.Value as string
+                                    ?? current.Properties["PSPath"]?.Value as string
+                                    ?? current.Properties["Path"]?.Value as string
+                                    ?? current.Properties["FullName"]?.Value as string;
+                    if (!string.IsNullOrWhiteSpace(hint))
+                    {
+                        string ext = System.IO.Path.GetExtension(hint);
+                        if (!string.IsNullOrWhiteSpace(ext))
+                        {
+                            _sourceExtensionHint = ext;
+                        }
+                    }
+                }
             }
-            switch (baseObj)
+            _inputObjectBuffer.Add(InputObject);
+            return;
+        }
+
+        if (ParameterSetName == "Path" && !string.IsNullOrWhiteSpace(Path))
+        {
+            try
             {
-                case string s:
-                    _inputObjectBuffer.Add(s);
-                    break;
-                case string[] arr:
-                    _inputObjectBuffer.AddRange(arr);
-                    break;
-                case IEnumerable<string> enumerable:
-                    _inputObjectBuffer.AddRange(enumerable);
-                    break;
-                default:
-                    WriteWarning($"InputObject of type '{baseObj.GetType().Name}' is not supported. Only string and string[] are accepted.");
-                    break;
+                Rows? result = ProcessPathInput();
+                if (result is not null)
+                {
+                    WriteObject(result);
+                    if (PassThru)
+                    {
+                        WriteVerbose($"Processed file '{Path}' with theme '{Theme}' {(string.IsNullOrWhiteSpace(Language) ? "(by extension)" : $"(token: {Language})")}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteError(new ErrorRecord(ex, "ShowTextMateCmdlet", ErrorCategory.NotSpecified, Path!));
             }
         }
     }
 
     protected override void EndProcessing()
     {
+        // For Path parameter set, each record is processed in ProcessRecord to support streaming multiple files.
+        // Only finalize buffered String input here.
+        if (ParameterSetName != "String")
+        {
+            return;
+        }
+
         try
         {
-            Rows? result = ParameterSetName switch
-            {
-                "String" => ProcessStringInput(),
-                "Path" => ProcessPathInput(),
-                _ => throw new InvalidOperationException($"Unknown parameter set: {ParameterSetName}")
-            };
-
+            Rows? result = ProcessStringInput();
             if (result is not null)
             {
                 WriteObject(result);
-
                 if (PassThru)
                 {
-                    WriteVerbose($"Processed {(ParameterSetName == "String" ? _inputObjectBuffer.Count : "file")} lines with theme '{Theme}' and {(ParameterSetName == "String" ? $"language '{Language}'" : "extension detection")}");
+                    WriteVerbose($"Processed {_inputObjectBuffer.Count} lines with theme '{Theme}' {(string.IsNullOrWhiteSpace(Language) ? "(by hint/default)" : $"(token: {Language})")}");
                 }
             }
         }
@@ -128,7 +137,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
             return null;
         }
 
-        string[] strings = _inputObjectBuffer.ToArray();
+        string[] strings = [.. _inputObjectBuffer];
         // If only one string and it contains any newline, split it into lines for correct rendering
         if (strings.Length == 1 && (strings[0].Contains('\n') || strings[0].Contains('\r')))
         {
@@ -140,7 +149,21 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
             return null;
         }
 
-        return Converter.ProcessLines(strings, Theme, Language ?? "powershell", isExtension: false);
+        // If a Language token was provided, resolve it first (language id or extension)
+        if (!string.IsNullOrWhiteSpace(Language))
+        {
+            (string? token, bool asExtension) = TextMateResolver.ResolveToken(Language!);
+            return Converter.ProcessLines(strings, Theme, token, isExtension: asExtension);
+        }
+
+        // Otherwise prefer extension hint from ETS (PSChildName/PSPath)
+        if (!string.IsNullOrWhiteSpace(_sourceExtensionHint))
+        {
+            return Converter.ProcessLines(strings, Theme, _sourceExtensionHint!, isExtension: true);
+        }
+
+        // Final fallback: default language
+        return Converter.ProcessLines(strings, Theme, "powershell", isExtension: false);
     }
 
     private Rows? ProcessPathInput()
@@ -152,14 +175,18 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
             throw new FileNotFoundException($"File not found: {filePath.FullName}", filePath.FullName);
         }
 
-        string extension = !string.IsNullOrEmpty(ExtensionOverride)
-            ? ExtensionOverride
-            : filePath.Extension;
-
-        WriteVerbose($"Processing file: {filePath.FullName} with extension: {extension}");
-
-        // Read file in cmdlet and pass to unified ProcessLines method
+        // Decide how to interpret based on precedence:
+        // 1) Language token (can be a language id OR an extension)
+        // 2) File extension
         string[] lines = File.ReadAllLines(filePath.FullName);
+        if (!string.IsNullOrWhiteSpace(Language))
+        {
+            (string? token, bool asExtension) = TextMateResolver.ResolveToken(Language!);
+            WriteVerbose($"Processing file: {filePath.FullName} with explicit token: {Language} (as {(asExtension ? "extension" : "language")})");
+            return Converter.ProcessLines(lines, Theme, token, isExtension: asExtension);
+        }
+        string extension = filePath.Extension;
+        WriteVerbose($"Processing file: {filePath.FullName} using file extension: {extension}");
         return Converter.ProcessLines(lines, Theme, extension, isExtension: true);
     }
 }

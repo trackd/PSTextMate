@@ -30,6 +30,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages#excluding-advisories -->
+    <PackageReference Include="System.Formats.Asn1" Version="8.0.1" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-447r-wph3-92pm" />
   </ItemGroup>
 </Project>

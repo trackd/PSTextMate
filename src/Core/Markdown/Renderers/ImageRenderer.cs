@@ -78,7 +78,7 @@ internal static class ImageRenderer
             int defaultMaxWidth = maxWidth ?? 80;  // Default to ~80 characters wide for terminal display
             int defaultMaxHeight = maxHeight ?? 30; // Default to ~30 lines high
 
-            if (TryCreateSixelImage(localImagePath, defaultMaxWidth, defaultMaxHeight, out var sixelImage) && sixelImage is not null)
+            if (TryCreateSixelImage(localImagePath, defaultMaxWidth, defaultMaxHeight, out IRenderable? sixelImage) && sixelImage is not null)
             {
                 return sixelImage;
             }
@@ -138,7 +138,7 @@ internal static class ImageRenderer
             int width = maxWidth ?? 60;  // Default max width for inline images
             int height = maxHeight ?? 20; // Default max height for inline images
 
-            if (TryCreateSixelImage(localImagePath, width, height, out var sixelImage) && sixelImage is not null)
+            if (TryCreateSixelImage(localImagePath, width, height, out IRenderable? sixelImage) && sixelImage is not null)
             {
                 return sixelImage;
             }

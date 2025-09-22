@@ -55,7 +55,7 @@ internal static class StyleHelper
             hexString = hexString[1..];
         }
 
-        var c = Convert.FromHexString(hexString);
+        byte[] c = Convert.FromHexString(hexString);
         return new Color(c[0], c[1], c[2]);
     }
 }

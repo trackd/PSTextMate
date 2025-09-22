@@ -24,7 +24,7 @@ public class TextMateExtensions : IValidateSetValuesGenerator
     }
     public static bool IsSupportedFile(string file)
     {
-        var ext = Path.GetExtension(file);
+        string ext = Path.GetExtension(file);
         return TextMateHelper.Extensions?.Contains(ext) == true;
     }
 

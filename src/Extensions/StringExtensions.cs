@@ -34,7 +34,7 @@ public static class StringExtensions
     /// <returns>Substring as string, or empty string if invalid indexes</returns>
     public static string SubstringAtIndexes(this string source, int startIndex, int endIndex)
     {
-        var span = source.SubstringAsSpan(startIndex, endIndex);
+        ReadOnlySpan<char> span = source.SubstringAsSpan(startIndex, endIndex);
         return span.IsEmpty ? string.Empty : span.ToString();
     }
 

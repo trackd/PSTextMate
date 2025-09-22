@@ -38,10 +38,10 @@ internal static class ListRenderer
                 paragraph.Append("\n", Style.Plain);
 
             // Check if this is a task list item using Markdig's native TaskList support
-            var (isTaskList, isChecked) = DetectTaskListItem(item);
+            (bool isTaskList, bool isChecked) = DetectTaskListItem(item);
 
             // Build prefix and append it
-            var prefixText = CreateListPrefixText(list.IsOrdered, isTaskList, isChecked, ref number);
+            string prefixText = CreateListPrefixText(list.IsOrdered, isTaskList, isChecked, ref number);
             paragraph.Append(prefixText, Style.Plain);
 
             // Extract and append the item content directly as styled text
@@ -98,12 +98,12 @@ internal static class ListRenderer
     {
         if (isTaskList)
         {
-            var emoji = isChecked ? TaskCheckedEmoji : TaskUncheckedEmoji;
+            string emoji = isChecked ? TaskCheckedEmoji : TaskUncheckedEmoji;
             return new Text(emoji, Style.Plain);
         }
         else if (isOrdered)
         {
-            var numberText = $"{number++}. ";
+            string numberText = $"{number++}. ";
             return new Text(numberText, Style.Plain);
         }
         else
@@ -127,13 +127,13 @@ internal static class ListRenderer
                     break;
 
                 case CodeBlock subCode:
-                    var codeText = subCode.Lines.ToString();
+                    string codeText = subCode.Lines.ToString();
                     paragraph.Append(codeText, Style.Plain);
                     break;
 
                 case ListBlock nestedList:
                     // For nested lists, render as indented text content
-                    var nestedContent = RenderNestedListAsText(nestedList, theme, 1);
+                    string nestedContent = RenderNestedListAsText(nestedList, theme, 1);
                     if (!string.IsNullOrEmpty(nestedContent))
                     {
                         paragraph.Append("\n", Style.Plain);
@@ -176,7 +176,7 @@ internal static class ListRenderer
                 break;
 
             case Markdig.Syntax.Inlines.ContainerInline container:
-                foreach (var child in container)
+                foreach (Inline child in container)
                 {
                     ExtractInlineTextRecursive(child, builder);
                 }
@@ -198,7 +198,7 @@ internal static class ListRenderer
     private static string RenderNestedListAsText(ListBlock list, Theme theme, int indentLevel)
     {
         var builder = new StringBuilder();
-        var indent = new string(' ', indentLevel * 2);
+        string indent = new string(' ', indentLevel * 2);
         int number = 1;
         bool isFirstItem = true;
 
@@ -209,7 +209,7 @@ internal static class ListRenderer
 
             builder.Append(indent);
 
-            var (isTaskList, isChecked) = DetectTaskListItem(item);
+            (bool isTaskList, bool isChecked) = DetectTaskListItem(item);
 
             if (isTaskList)
             {
@@ -225,7 +225,7 @@ internal static class ListRenderer
             }
 
             // Extract item text without complex inline processing for nested items
-            var itemText = ExtractListItemTextSimple(item);
+            string itemText = ExtractListItemTextSimple(item);
             builder.Append(itemText.Trim());
 
             isFirstItem = false;

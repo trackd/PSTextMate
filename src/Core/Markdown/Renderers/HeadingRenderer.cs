@@ -1,4 +1,5 @@
 ﻿using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
@@ -21,11 +22,11 @@ internal static class HeadingRenderer
     public static IRenderable Render(HeadingBlock heading, Theme theme)
     {
         // Extract heading text without building markup strings
-        var headingText = ExtractHeadingText(heading);
+        string headingText = ExtractHeadingText(heading);
 
         // Get theme colors for heading styling
-        var headingScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Heading", heading.Level);
-        var (hfg, hbg, hfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(headingScopes), theme);
+        string[] headingScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Heading", heading.Level);
+        (int hfg, int hbg, FontStyle hfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(headingScopes), theme);
 
         // Build styling directly
         Style headingStyle = CreateHeadingStyle(hfg, hbg, hfs, theme, heading.Level);
@@ -44,7 +45,7 @@ internal static class HeadingRenderer
 
         var textBuilder = new System.Text.StringBuilder();
 
-        foreach (var inline in heading.Inline)
+        foreach (Inline inline in heading.Inline)
         {
             switch (inline)
             {
@@ -88,7 +89,7 @@ internal static class HeadingRenderer
                 break;
 
             case Markdig.Syntax.Inlines.ContainerInline container:
-                foreach (var child in container)
+                foreach (Inline child in container)
                 {
                     ExtractInlineTextRecursive(child, builder);
                 }

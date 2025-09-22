@@ -36,11 +36,11 @@ internal static partial class MarkdownInputValidator
         if (markdown.Length > MaxMarkdownLength)
             errors.Add($"Markdown content exceeds maximum length of {MaxMarkdownLength:N0} characters");
 
-        var lines = markdown.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        string[] lines = markdown.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length > MaxLineCount)
             errors.Add($"Markdown content exceeds maximum line count of {MaxLineCount:N0}");
 
-        foreach (var line in lines)
+        foreach (string line in lines)
         {
             if (line.Length > MaxLineLength)
             {
@@ -87,7 +87,7 @@ internal static partial class MarkdownInputValidator
             return null;
 
         // Basic URL validation
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) &&
             !Uri.TryCreate(url, UriKind.Relative, out uri))
             return null;
 

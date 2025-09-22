@@ -1,6 +1,8 @@
 using System.Management.Automation;
 using TextMateSharp.Grammars;
 using PwshSpectreConsole.TextMate.Extensions;
+using PwshSpectreConsole.TextMate.Core;
+using Spectre.Console.Rendering;
 
 namespace PwshSpectreConsole.TextMate.Cmdlets;
 
@@ -67,7 +69,7 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
                 {
                     return;
                 }
-                var obj = Test.DebugTextMate(strings, Theme, Language);
+                Test.TextMateDebug[]? obj = Test.DebugTextMate(strings, Theme, Language);
                 WriteObject(obj, true);
             }
             else if (ParameterSetName == "Path" && Path is not null)
@@ -81,7 +83,7 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
                     ? ExtensionOverride
                     : Filepath.Extension;
                 string[] strings = File.ReadAllLines(Filepath.FullName);
-                var obj = Test.DebugTextMate(strings, Theme, ext, true);
+                Test.TextMateDebug[]? obj = Test.DebugTextMate(strings, Theme, ext, true);
                 WriteObject(obj, true);
             }
         }
@@ -142,7 +144,7 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
                 {
                     return;
                 }
-                var obj = Test.DebugTextMateTokens(strings, Theme, Language);
+                TokenDebugInfo[]? obj = Test.DebugTextMateTokens(strings, Theme, Language);
                 WriteObject(obj, true);
             }
             else if (ParameterSetName == "Path" && Path is not null)
@@ -156,7 +158,7 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
                     ? ExtensionOverride
                     : Filepath.Extension;
                 string[] strings = File.ReadAllLines(Filepath.FullName);
-                var obj = Test.DebugTextMateTokens(strings, Theme, ext, true);
+                TokenDebugInfo[]? obj = Test.DebugTextMateTokens(strings, Theme, ext, true);
                 WriteObject(obj, true);
             }
         }
@@ -224,7 +226,7 @@ public sealed class TestImageRenderingCmdlet : PSCmdlet
         {
             WriteVerbose($"Testing image rendering for: {ImageUrl}");
 
-            var result = Core.Markdown.Renderers.ImageRenderer.RenderImage(AltText, ImageUrl);
+            IRenderable result = Core.Markdown.Renderers.ImageRenderer.RenderImage(AltText, ImageUrl);
 
             var debugInfo = new
             {

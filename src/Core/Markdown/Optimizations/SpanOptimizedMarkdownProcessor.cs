@@ -152,7 +152,7 @@ internal static class SpanOptimizedMarkdownProcessor
 
         // Calculate total capacity
         int totalLength = (lines.Length - 1) * ending.Length;
-        foreach (var line in lines)
+        foreach (string line in lines)
             totalLength += line?.Length ?? 0;
 
         var builder = new StringBuilder(totalLength);
@@ -176,7 +176,7 @@ internal static class SpanOptimizedMarkdownProcessor
     {
         // First pass: count non-empty lines
         int nonEmptyCount = 0;
-        foreach (var line in lines)
+        foreach (string line in lines)
         {
             if (!string.IsNullOrEmpty(line) && !line.AsSpan().Trim().IsEmpty)
                 nonEmptyCount++;

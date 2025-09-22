@@ -42,7 +42,7 @@ internal static class MarkdigTextMateScopeMapper
     {
         if (blockType == "Heading" && headingLevel > 0 && headingLevel <= 6)
             return BlockScopeMap[$"Heading{headingLevel}"];
-        if (BlockScopeMap.TryGetValue(blockType, out var scopes))
+        if (BlockScopeMap.TryGetValue(blockType, out string[]? scopes))
             return scopes;
         return ["text.plain"];
     }
@@ -59,7 +59,7 @@ internal static class MarkdigTextMateScopeMapper
                 _ => ["text.plain"]
             };
         }
-        if (InlineScopeMap.TryGetValue(inlineType, out var scopes))
+        if (InlineScopeMap.TryGetValue(inlineType, out string[]? scopes))
             return scopes;
         return ["text.plain"];
     }

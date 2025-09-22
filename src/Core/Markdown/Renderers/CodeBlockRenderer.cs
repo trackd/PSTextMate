@@ -6,6 +6,7 @@ using Spectre.Console.Rendering;
 using PwshSpectreConsole.TextMate.Extensions;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
+using Markdig.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -27,14 +28,14 @@ internal static class CodeBlockRenderer
     /// <returns>Rendered code block in a panel</returns>
     public static IRenderable RenderFencedCodeBlock(FencedCodeBlock fencedCode, Theme theme, ThemeName themeName)
     {
-        var codeLines = ExtractCodeLinesWithWhitespaceHandling(fencedCode.Lines);
-        var language = ExtractLanguageImproved(fencedCode.Info);
+        string[] codeLines = ExtractCodeLinesWithWhitespaceHandling(fencedCode.Lines);
+        string language = ExtractLanguageImproved(fencedCode.Info);
 
         if (!string.IsNullOrEmpty(language))
         {
             try
             {
-                var rows = TextMateProcessor.ProcessLinesCodeBlock(codeLines, themeName, language, false);
+                Rows? rows = TextMateProcessor.ProcessLinesCodeBlock(codeLines, themeName, language, false);
                 if (rows is not null)
                 {
                     return new Panel(rows)
@@ -58,7 +59,7 @@ internal static class CodeBlockRenderer
     /// <returns>Rendered code block in a panel</returns>
     public static IRenderable RenderCodeBlock(CodeBlock code, Theme theme)
     {
-        var codeLines = ExtractCodeLinesFromStringLineGroup(code.Lines);
+        string[] codeLines = ExtractCodeLinesFromStringLineGroup(code.Lines);
         return CreateOptimizedCodePanel(codeLines, "code", theme);
     }
 
@@ -72,7 +73,7 @@ internal static class CodeBlockRenderer
 
         var codeLines = new List<string>(lines.Count);
 
-        foreach (var line in lines.Lines)
+        foreach (StringLine line in lines.Lines)
         {
             try
             {
@@ -101,12 +102,12 @@ internal static class CodeBlockRenderer
         if (lines.Count == 0)
             return [];
 
-        var content = lines.ToString();
+        string content = lines.ToString();
         if (string.IsNullOrEmpty(content))
             return [];
 
         // Split into lines and handle whitespace properly
-        var splitLines = content.Split(['\r', '\n'], StringSplitOptions.None);
+        string[] splitLines = content.Split(['\r', '\n'], StringSplitOptions.None);
 
         // Process each line to handle whitespace correctly
         for (int i = 0; i < splitLines.Length; i++)
@@ -125,7 +126,7 @@ internal static class CodeBlockRenderer
         if (string.IsNullOrWhiteSpace(info))
             return string.Empty;
 
-        var infoSpan = info.AsSpan().Trim();
+        ReadOnlySpan<char> infoSpan = info.AsSpan().Trim();
 
         // Handle various language specification formats
         // Examples: "csharp", "c#", "python copy", "javascript {1-3}", etc.
@@ -137,7 +138,7 @@ internal static class CodeBlockRenderer
             infoSpan = infoSpan[..endIndex];
         }
 
-        var language = infoSpan.ToString().ToLowerInvariant();
+        string language = infoSpan.ToString().ToLowerInvariant();
 
         // Handle common language aliases and improve detection
         return NormalizeLanguageName(language);
@@ -205,7 +206,7 @@ internal static class CodeBlockRenderer
         if (lastNonEmptyIndex == lines.Length - 1)
             return lines; // No trailing empty lines to remove
 
-        var result = new string[lastNonEmptyIndex + 1];
+        string[] result = new string[lastNonEmptyIndex + 1];
         Array.Copy(lines, result, lastNonEmptyIndex + 1);
         return result;
     }
@@ -217,23 +218,23 @@ internal static class CodeBlockRenderer
     private static Panel CreateOptimizedCodePanel(string[] codeLines, string language, Theme theme)
     {
         // Get theme colors for code blocks
-        var codeScopes = new[] { "text.html.markdown", "markup.fenced_code.block.markdown" };
-        var (codeFg, codeBg, codeFs) = TokenProcessor.ExtractThemeProperties(
+        string[] codeScopes = new[] { "text.html.markdown", "markup.fenced_code.block.markdown" };
+        (int codeFg, int codeBg, FontStyle codeFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(codeScopes), theme);
 
         // Create code styling
         Color? foregroundColor = codeFg != -1 ? StyleHelper.GetColor(codeFg, theme) : Color.Grey;
         Color? backgroundColor = codeBg != -1 ? StyleHelper.GetColor(codeBg, theme) : Color.Black;
-        var decoration = StyleHelper.GetDecoration(codeFs);
+        Decoration decoration = StyleHelper.GetDecoration(codeFs);
         var codeStyle = new Style(foregroundColor, backgroundColor, decoration);
 
         // Join lines efficiently
-        var codeText = string.Join('\n', codeLines);
+        string codeText = string.Join('\n', codeLines);
 
         // Create Text object directly instead of Markup to avoid parsing issues
         var codeContent = new Text(codeText, codeStyle);
 
-        var headerText = !string.IsNullOrEmpty(language) ? language : "code";
+        string headerText = !string.IsNullOrEmpty(language) ? language : "code";
 
         return new Panel(codeContent)
             .Border(BoxBorder.Rounded)

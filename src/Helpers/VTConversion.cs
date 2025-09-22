@@ -1,13 +1,13 @@
 ﻿using System.Runtime.CompilerServices;
 using Spectre.Console;
 
-namespace PwshSpectreConsole.VT;
+namespace PwshSpectreConsole.TextMate.Core.Helpers;
 
 /// <summary>
 /// Efficient parser for VT (Virtual Terminal) escape sequences that converts them to Spectre.Console objects.
 /// Supports RGB colors, 256-color palette, 3-bit colors, and text decorations.
 /// </summary>
-public static class SpectreConsoleVTParser
+public static class VTParser
 {
     private const char ESC = '\x1B';
     private const char CSI_START = '[';

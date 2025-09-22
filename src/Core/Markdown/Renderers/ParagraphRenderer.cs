@@ -1,4 +1,5 @@
-﻿using Markdig.Extensions.AutoLinks;
+﻿using System.Text.RegularExpressions;
+using Markdig.Extensions.AutoLinks;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Spectre.Console;
@@ -42,12 +43,12 @@ internal static class ParagraphRenderer
             switch (inline)
             {
                 case LiteralInline literal:
-                    var literalText = literal.Content.ToString();
+                    string literalText = literal.Content.ToString();
 
                     // Check for username patterns like @username
-                    if (TryParseUsernameLinks(literalText, out var segments))
+                    if (TryParseUsernameLinks(literalText, out TextSegment[]? segments))
                     {
-                        foreach (var segment in segments)
+                        foreach (TextSegment segment in segments)
                         {
                             if (segment.IsUsername)
                             {
@@ -83,7 +84,9 @@ internal static class ParagraphRenderer
                     ProcessLinkInline(paragraph, link, theme);
                     break;
 
-                // Note: AutoLinkInline handling can be added when we identify the correct class name
+                case AutolinkInline autoLink:
+                    ProcessAutoLinkInline(paragraph, autoLink, theme);
+                    break;
 
                 case Markdig.Extensions.TaskLists.TaskList taskList:
                     // TaskList items are handled at the list level, skip here
@@ -95,52 +98,14 @@ internal static class ParagraphRenderer
 
                 case HtmlInline html:
                     // For HTML inlines, just extract the text content
-                    var htmlText = html.Tag ?? "";
+                    string htmlText = html.Tag ?? "";
                     paragraph.Append(htmlText, Style.Plain);
                     break;
 
                 default:
-                    // Fallback for unknown inline types - extract text
-                    var defaultText = ExtractInlineText(inline);
-
-                    // Check if this might be an AutoLink by looking at the type name
-                    var typeName = inline.GetType().Name;
-
-                    // Debug: Check for specific AutoLink types
-                    if (typeName.Contains("Auto") || typeName.Contains("Link") ||
-                        (!string.IsNullOrEmpty(defaultText) &&
-                         (defaultText.StartsWith("http://", StringComparison.Ordinal) ||
-                          defaultText.StartsWith("https://", StringComparison.Ordinal) ||
-                          defaultText.Contains('@'))))
-                    {
-                        // Try to extract URL from AutoLink or detect URL patterns
-                        string? autoUrl = TryExtractAutoLinkUrl(inline);
-                        if (string.IsNullOrEmpty(autoUrl) &&
-                            (defaultText.StartsWith("http://", StringComparison.Ordinal) ||
-                             defaultText.StartsWith("https://", StringComparison.Ordinal)))
-                        {
-                            autoUrl = defaultText; // Use the text itself as URL
-                        }
-
-                        if (!string.IsNullOrEmpty(autoUrl))
-                        {
-                            // Create clickable auto-link
-                            var autoLinkStyle = new Style(
-                                foreground: Color.Blue,
-                                decoration: Decoration.Underline,
-                                link: autoUrl
-                            );
-                            paragraph.Append(defaultText, autoLinkStyle);
-                        }
-                        else
-                        {
-                            paragraph.Append(defaultText, Style.Plain);
-                        }
-                    }
-                    else
-                    {
-                        paragraph.Append(defaultText, Style.Plain);
-                    }
+                    // Fallback for unknown inline types - just write text as-is
+                    string defaultText = ExtractInlineText(inline);
+                    paragraph.Append(defaultText, Style.Plain);
                     break;
             }
         }
@@ -152,7 +117,7 @@ internal static class ParagraphRenderer
     private static void ProcessEmphasisInline(Paragraph paragraph, EmphasisInline emphasis, Theme theme)
     {
         // Determine emphasis style based on delimiter count
-        var decoration = emphasis.DelimiterCount switch
+        Decoration decoration = emphasis.DelimiterCount switch
         {
             1 => Decoration.Italic,      // Single * or _
             2 => Decoration.Bold,        // Double ** or __
@@ -175,13 +140,13 @@ internal static class ParagraphRenderer
             switch (inline)
             {
                 case LiteralInline literal:
-                    var literalText = literal.Content.ToString();
+                    string literalText = literal.Content.ToString();
                     var emphasisStyle = new Style(decoration: decoration);
 
                     // Check for username patterns like @username
-                    if (TryParseUsernameLinks(literalText, out var segments))
+                    if (TryParseUsernameLinks(literalText, out TextSegment[]? segments))
                     {
-                        foreach (var segment in segments)
+                        foreach (TextSegment segment in segments)
                         {
                             if (segment.IsUsername)
                             {
@@ -217,7 +182,7 @@ internal static class ParagraphRenderer
 
                 case EmphasisInline nestedEmphasis:
                     // Handle nested emphasis by combining decorations
-                    var nestedDecoration = nestedEmphasis.DelimiterCount switch
+                    Decoration nestedDecoration = nestedEmphasis.DelimiterCount switch
                     {
                         1 => Decoration.Italic,
                         2 => Decoration.Bold,
@@ -233,7 +198,7 @@ internal static class ParagraphRenderer
 
                 default:
                     // Fallback - apply emphasis to extracted text
-                    var defaultText = ExtractInlineText(inline);
+                    string defaultText = ExtractInlineText(inline);
                     paragraph.Append(defaultText, new Style(decoration: decoration));
                     break;
             }
@@ -246,21 +211,21 @@ internal static class ParagraphRenderer
     private static void ProcessLinkInlineWithDecoration(Paragraph paragraph, LinkInline link, Decoration emphasisDecoration, Theme theme)
     {
         // Use link text if available, otherwise use URL
-        var linkText = ExtractInlineText(link);
+        string linkText = ExtractInlineText(link);
         if (string.IsNullOrEmpty(linkText))
         {
             linkText = link.Url ?? "";
         }
 
         // Get theme colors for links
-        var linkScopes = new[] { "markup.underline.link" };
-        var (linkFg, linkBg, linkFs) = TokenProcessor.ExtractThemeProperties(
+        string[] linkScopes = new[] { "markup.underline.link" };
+        (int linkFg, int linkBg, FontStyle linkFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(linkScopes), theme);
 
         // Create link styling with emphasis decoration combined
         Color? foregroundColor = linkFg != -1 ? StyleHelper.GetColor(linkFg, theme) : Color.Blue;
         Color? backgroundColor = linkBg != -1 ? StyleHelper.GetColor(linkBg, theme) : null;
-        var linkDecoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline | emphasisDecoration;
+        Decoration linkDecoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline | emphasisDecoration;
 
         // Create style with link parameter for clickable links
         var linkStyle = new Style(
@@ -279,14 +244,14 @@ internal static class ParagraphRenderer
     private static void ProcessCodeInline(Paragraph paragraph, CodeInline code, Theme theme)
     {
         // Get theme colors for inline code
-        var codeScopes = new[] { "markup.inline.raw" };
-        var (codeFg, codeBg, codeFs) = TokenProcessor.ExtractThemeProperties(
+        string[] codeScopes = new[] { "markup.inline.raw" };
+        (int codeFg, int codeBg, FontStyle codeFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(codeScopes), theme);
 
         // Create code styling
         Color? foregroundColor = codeFg != -1 ? StyleHelper.GetColor(codeFg, theme) : Color.Yellow;
         Color? backgroundColor = codeBg != -1 ? StyleHelper.GetColor(codeBg, theme) : Color.Grey11;
-        var decoration = StyleHelper.GetDecoration(codeFs);
+        Decoration decoration = StyleHelper.GetDecoration(codeFs);
 
         var codeStyle = new Style(foregroundColor, backgroundColor, decoration);
         paragraph.Append(code.Content, codeStyle);
@@ -298,21 +263,21 @@ internal static class ParagraphRenderer
     private static void ProcessLinkInline(Paragraph paragraph, LinkInline link, Theme theme)
     {
         // Use link text if available, otherwise use URL
-        var linkText = ExtractInlineText(link);
+        string linkText = ExtractInlineText(link);
         if (string.IsNullOrEmpty(linkText))
         {
             linkText = link.Url ?? "";
         }
 
         // Get theme colors for links
-        var linkScopes = new[] { "markup.underline.link" };
-        var (linkFg, linkBg, linkFs) = TokenProcessor.ExtractThemeProperties(
+        string[] linkScopes = new[] { "markup.underline.link" };
+        (int linkFg, int linkBg, FontStyle linkFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(linkScopes), theme);
 
         // Create link styling with clickable URL
         Color? foregroundColor = linkFg != -1 ? StyleHelper.GetColor(linkFg, theme) : Color.Blue;
         Color? backgroundColor = linkBg != -1 ? StyleHelper.GetColor(linkBg, theme) : null;
-        var decoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline;
+        Decoration decoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline;
 
         // Create style with link parameter for clickable links
         var linkStyle = new Style(
@@ -323,6 +288,38 @@ internal static class ParagraphRenderer
         );
 
         paragraph.Append(linkText, linkStyle);
+    }
+
+    /// <summary>
+    /// Processes Markdig AutolinkInline (URLs/emails detected by UseAutoLinks).
+    /// </summary>
+    private static void ProcessAutoLinkInline(Paragraph paragraph, AutolinkInline autoLink, Theme theme)
+    {
+        string url = autoLink.Url ?? string.Empty;
+        if (string.IsNullOrEmpty(url))
+        {
+            // Nothing to render
+            return;
+        }
+
+        // Get theme colors for links
+        string[] linkScopes = new[] { "markup.underline.link" };
+        (int linkFg, int linkBg, FontStyle linkFs) = TokenProcessor.ExtractThemeProperties(
+            new MarkdownToken(linkScopes), theme);
+
+        Color? foregroundColor = linkFg != -1 ? StyleHelper.GetColor(linkFg, theme) : Color.Blue;
+        Color? backgroundColor = linkBg != -1 ? StyleHelper.GetColor(linkBg, theme) : null;
+        Decoration decoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline;
+
+        var linkStyle = new Style(
+            foreground: foregroundColor,
+            background: backgroundColor,
+            decoration: decoration,
+            link: url
+        );
+
+        // For autolinks, the visible text is the URL itself
+        paragraph.Append(url, linkStyle);
     }
 
     /// <summary>
@@ -349,7 +346,7 @@ internal static class ParagraphRenderer
 
         // Simple regex to find @username patterns
         var usernamePattern = new System.Text.RegularExpressions.Regex(@"@[a-zA-Z0-9_-]+");
-        var matches = usernamePattern.Matches(text);
+        MatchCollection matches = usernamePattern.Matches(text);
 
         if (matches.Count == 0)
         {
@@ -381,33 +378,6 @@ internal static class ParagraphRenderer
         return true;
     }
 
-    /// <summary>
-    /// Tries to extract URL from potential AutoLink inlines using reflection.
-    /// </summary>
-    private static string? TryExtractAutoLinkUrl(Inline inline)
-    {
-        try
-        {
-            // Try common AutoLink property names
-            var urlProperty = inline.GetType().GetProperty("Url");
-            if (urlProperty is not null)
-            {
-                return urlProperty.GetValue(inline) as string;
-            }
-
-            var linkProperty = inline.GetType().GetProperty("Link");
-            if (linkProperty is not null)
-            {
-                return linkProperty.GetValue(inline) as string;
-            }
-
-            return null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
     private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder)
     {
         switch (inline)
@@ -417,7 +387,7 @@ internal static class ParagraphRenderer
                 break;
 
             case ContainerInline container:
-                foreach (var child in container)
+                foreach (Inline child in container)
                 {
                     ExtractInlineTextRecursive(child, builder);
                 }

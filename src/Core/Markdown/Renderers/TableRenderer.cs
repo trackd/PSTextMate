@@ -35,12 +35,12 @@ internal static class TableRenderer
             return null;
 
         // Add headers if present
-        var headerRow = allRows.FirstOrDefault(r => r.isHeader);
+        (bool isHeader, List<TableCellContent> cells) headerRow = allRows.FirstOrDefault(r => r.isHeader);
         if (headerRow.cells?.Count > 0)
         {
             for (int i = 0; i < headerRow.cells.Count; i++)
             {
-                var cell = headerRow.cells[i];
+                TableCellContent cell = headerRow.cells[i];
                 // Use constructor to set header text; this is the most compatible way
                 var column = new TableColumn(cell.Text);
                 // Apply alignment if Markdig specified one for the column
@@ -60,12 +60,12 @@ internal static class TableRenderer
         else
         {
             // No explicit headers, use first row as headers
-            var firstRow = allRows.FirstOrDefault();
+            (bool isHeader, List<TableCellContent> cells) firstRow = allRows.FirstOrDefault();
             if (firstRow.cells?.Count > 0)
             {
                 for (int i = 0; i < firstRow.cells.Count; i++)
                 {
-                    var cell = firstRow.cells[i];
+                    TableCellContent cell = firstRow.cells[i];
                     var column = new TableColumn(cell.Text);
                     if (i < table.ColumnDefinitions.Count)
                     {
@@ -84,14 +84,14 @@ internal static class TableRenderer
         }
 
         // Add data rows
-        foreach (var (isHeader, cells) in allRows.Where(r => !r.isHeader))
+        foreach ((bool isHeader, List<TableCellContent>? cells) in allRows.Where(r => !r.isHeader))
         {
             if (cells?.Count > 0)
             {
                 var rowCells = new List<IRenderable>();
-                foreach (var cell in cells)
+                foreach (TableCellContent? cell in cells)
                 {
-                    var cellStyle = GetCellStyle(theme);
+                    Style cellStyle = GetCellStyle(theme);
                     rowCells.Add(new Text(cell.Text, cellStyle));
                 }
                 spectreTable.AddRow(rowCells.ToArray());
@@ -123,8 +123,8 @@ internal static class TableRenderer
             {
                 if (row[i] is TableCell cell)
                 {
-                    var cellText = ExtractCellTextOptimized(cell, theme);
-                    var alignment = i < table.ColumnDefinitions.Count ? table.ColumnDefinitions[i].Alignment : null;
+                    string cellText = ExtractCellTextOptimized(cell, theme);
+                    TableColumnAlign? alignment = i < table.ColumnDefinitions.Count ? table.ColumnDefinitions[i].Alignment : null;
                     cells.Add(new TableCellContent(cellText, alignment));
                 }
             }
@@ -202,7 +202,7 @@ internal static class TableRenderer
                 break;
 
             case ContainerInline container:
-                foreach (var child in container)
+                foreach (Inline child in container)
                 {
                     ExtractInlineTextRecursive(child, builder);
                 }
@@ -223,8 +223,8 @@ internal static class TableRenderer
     private static Style GetTableBorderStyle(Theme theme)
     {
         // Get theme colors for table borders
-        var borderScopes = new[] { "punctuation.definition.table" };
-        var (borderFg, borderBg, borderFs) = TokenProcessor.ExtractThemeProperties(
+        string[] borderScopes = new[] { "punctuation.definition.table" };
+        (int borderFg, int borderBg, FontStyle borderFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(borderScopes), theme);
 
         if (borderFg != -1)
@@ -241,13 +241,13 @@ internal static class TableRenderer
     private static Style GetHeaderStyle(Theme theme)
     {
         // Get theme colors for table headers
-        var headerScopes = new[] { "markup.heading.table" };
-        var (headerFg, headerBg, headerFs) = TokenProcessor.ExtractThemeProperties(
+        string[] headerScopes = new[] { "markup.heading.table" };
+        (int headerFg, int headerBg, FontStyle headerFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(headerScopes), theme);
 
         Color? foregroundColor = headerFg != -1 ? StyleHelper.GetColor(headerFg, theme) : Color.Yellow;
         Color? backgroundColor = headerBg != -1 ? StyleHelper.GetColor(headerBg, theme) : null;
-        var decoration = StyleHelper.GetDecoration(headerFs) | Decoration.Bold;
+        Decoration decoration = StyleHelper.GetDecoration(headerFs) | Decoration.Bold;
 
         return new Style(foregroundColor, backgroundColor, decoration);
     }
@@ -258,13 +258,13 @@ internal static class TableRenderer
     private static Style GetCellStyle(Theme theme)
     {
         // Get theme colors for table cells
-        var cellScopes = new[] { "markup.table.cell" };
-        var (cellFg, cellBg, cellFs) = TokenProcessor.ExtractThemeProperties(
+        string[] cellScopes = new[] { "markup.table.cell" };
+        (int cellFg, int cellBg, FontStyle cellFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(cellScopes), theme);
 
         Color? foregroundColor = cellFg != -1 ? StyleHelper.GetColor(cellFg, theme) : Color.White;
         Color? backgroundColor = cellBg != -1 ? StyleHelper.GetColor(cellBg, theme) : null;
-        var decoration = StyleHelper.GetDecoration(cellFs);
+        Decoration decoration = StyleHelper.GetDecoration(cellFs);
 
         return new Style(foregroundColor, backgroundColor, decoration);
     }

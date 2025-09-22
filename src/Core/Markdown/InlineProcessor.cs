@@ -97,7 +97,7 @@ internal static class InlineProcessor
         // In the future, this could be enhanced to support actual Sixel rendering
 
         // Check if the image format is likely supported
-        var isSupported = ImageFile.IsLikelySupportedImageFormat(url);
+        bool isSupported = ImageFile.IsLikelySupportedImageFormat(url);
 
         if (isSupported)
         {

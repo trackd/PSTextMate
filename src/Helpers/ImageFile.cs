@@ -31,14 +31,14 @@ internal static class ImageFile
         }
 
         // Check if it's a base64 data URI
-        var base64Match = Base64Regex.Match(imageSource);
+        Match base64Match = Base64Regex.Match(imageSource);
         if (base64Match.Success)
         {
             return await ConvertBase64ToFileAsync(base64Match.Groups["type"].Value, base64Match.Groups["data"].Value);
         }
 
         // Check if it's a URL
-        if (Uri.TryCreate(imageSource, UriKind.Absolute, out var uri) &&
+        if (Uri.TryCreate(imageSource, UriKind.Absolute, out Uri? uri) &&
             (uri.Scheme == "http" || uri.Scheme == "https"))
         {
             return await DownloadImageToTempFileAsync(uri);
@@ -51,8 +51,8 @@ internal static class ImageFile
         }
 
         // Try to resolve relative paths
-        var currentDirectory = Environment.CurrentDirectory;
-        var fullPath = Path.GetFullPath(Path.Combine(currentDirectory, imageSource));
+        string currentDirectory = Environment.CurrentDirectory;
+        string fullPath = Path.GetFullPath(Path.Combine(currentDirectory, imageSource));
         if (File.Exists(fullPath))
         {
             return fullPath;
@@ -71,8 +71,8 @@ internal static class ImageFile
     {
         try
         {
-            var imageBytes = Convert.FromBase64String(base64Data);
-            var tempFileName = Path.Combine(Path.GetTempPath(), $"pstextmate_img_{Guid.NewGuid():N}.{imageType}");
+            byte[] imageBytes = Convert.FromBase64String(base64Data);
+            string tempFileName = Path.Combine(Path.GetTempPath(), $"pstextmate_img_{Guid.NewGuid():N}.{imageType}");
 
             await File.WriteAllBytesAsync(tempFileName, imageBytes);
 
@@ -109,20 +109,20 @@ internal static class ImageFile
     {
         try
         {
-            using var response = await HttpClient.GetAsync(imageUri);
+            using HttpResponseMessage response = await HttpClient.GetAsync(imageUri);
             if (!response.IsSuccessStatusCode)
             {
                 return null;
             }
 
-            var contentType = response.Content.Headers.ContentType?.MediaType;
-            var extension = GetExtensionFromContentType(contentType) ??
+            string? contentType = response.Content.Headers.ContentType?.MediaType;
+            string extension = GetExtensionFromContentType(contentType) ??
                            Path.GetExtension(imageUri.LocalPath) ??
                            ".img";
 
-            var tempFileName = Path.Combine(Path.GetTempPath(), $"pstextmate_img_{Guid.NewGuid():N}{extension}");
+            string tempFileName = Path.Combine(Path.GetTempPath(), $"pstextmate_img_{Guid.NewGuid():N}{extension}");
 
-            using var fileStream = File.Create(tempFileName);
+            using FileStream fileStream = File.Create(tempFileName);
             await response.Content.CopyToAsync(fileStream);
 
             // Schedule cleanup after a reasonable time (1 hour)
@@ -183,8 +183,8 @@ internal static class ImageFile
         }
 
         // Check for supported extensions
-        var extension = Path.GetExtension(imageSource).ToLowerInvariant();
-        var supportedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
+        string extension = Path.GetExtension(imageSource).ToLowerInvariant();
+        string[] supportedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
 
         if (supportedExtensions.Contains(extension))
         {
@@ -192,19 +192,19 @@ internal static class ImageFile
         }
 
         // Check for base64 data URI with supported format
-        var base64Match = Base64Regex.Match(imageSource);
+        Match base64Match = Base64Regex.Match(imageSource);
         if (base64Match.Success)
         {
-            var imageType = base64Match.Groups["type"].Value.ToLowerInvariant();
-            var supportedTypes = new[] { "jpg", "jpeg", "png", "gif", "bmp", "webp" };
+            string imageType = base64Match.Groups["type"].Value.ToLowerInvariant();
+            string[] supportedTypes = new[] { "jpg", "jpeg", "png", "gif", "bmp", "webp" };
             return supportedTypes.Contains(imageType);
         }
 
         // For URLs, check the extension in the URL path
-        if (Uri.TryCreate(imageSource, UriKind.Absolute, out var uri) &&
+        if (Uri.TryCreate(imageSource, UriKind.Absolute, out Uri? uri) &&
             (uri.Scheme == "http" || uri.Scheme == "https"))
         {
-            var urlExtension = Path.GetExtension(uri.LocalPath).ToLowerInvariant();
+            string urlExtension = Path.GetExtension(uri.LocalPath).ToLowerInvariant();
             return supportedExtensions.Contains(urlExtension);
         }
 

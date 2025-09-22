@@ -10,7 +10,7 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// Supports both string input and file processing with theme customization.
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
-[Alias("st")]
+[Alias("st","Show-Code")]
 [OutputType(typeof(Rows))]
 public sealed class ShowTextMateCmdlet : PSCmdlet
 {

@@ -136,8 +136,10 @@ internal static class ListRenderer
                     string nestedContent = RenderNestedListAsText(nestedList, theme, 1);
                     if (!string.IsNullOrEmpty(nestedContent))
                     {
-                        paragraph.Append("\n", Style.Plain);
+                        // Show nested content immediately under the parent without pre-padding
                         paragraph.Append(nestedContent, Style.Plain);
+                        // Then add a blank line after the nested block to visually separate from following siblings
+                        // paragraph.Append("\n", Style.Plain);
                     }
                     break;
             }

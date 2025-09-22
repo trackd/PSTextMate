@@ -7,7 +7,7 @@
     Copyright            = '(c) trackd. All rights reserved.'
     PowerShellVersion    = '7.4'
     CompatiblePSEditions = 'Core'
-    CmdletsToExport      = 'Show-TextMate', 'Test-SupportedTextMate', 'Get-SupportedTextMate', 'Debug-TextMate', 'Debug-TextMateTokens'
+    CmdletsToExport      = 'Show-TextMate', 'Test-SupportedTextMate', 'Get-SupportedTextMate', 'Debug-TextMate', 'Debug-TextMateTokens','Debug-SixelSupport','Test-ImageRendering'
     AliasesToExport      = '*'
     RequiredAssemblies   = './lib/TextMateSharp.dll', './lib/TextMateSharp.Grammars.dll', './lib/Onigwrap.dll', 'Markdig.Signed.dll'
     FormatsToProcess     = 'PSTextMate.format.ps1xml'

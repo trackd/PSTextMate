@@ -152,49 +152,9 @@ internal static class ListRenderer
     {
         if (inlines is null) return;
 
-        foreach (Inline inline in inlines)
-        {
-            switch (inline)
-            {
-                case Markdig.Syntax.Inlines.LiteralInline literal:
-                    var literalText = literal.Content.ToString();
-                    paragraph.Append(literalText, Style.Plain);
-                    break;
-
-                case Markdig.Syntax.Inlines.EmphasisInline emphasis:
-                    var emphasisStyle = emphasis.DelimiterCount == 2
-                        ? new Style(decoration: Decoration.Bold)
-                        : new Style(decoration: Decoration.Italic);
-
-                    var emphasisContent = ExtractInlineText(emphasis);
-                    paragraph.Append(emphasisContent, emphasisStyle);
-                    break;
-
-                case Markdig.Syntax.Inlines.CodeInline code:
-                    var codeStyle = new Style(foreground: Color.Yellow, background: Color.Grey11);
-                    paragraph.Append(code.Content, codeStyle);
-                    break;
-
-                case Markdig.Syntax.Inlines.LinkInline link:
-                    var linkStyle = new Style(foreground: Color.Blue, decoration: Decoration.Underline);
-                    var linkText = ExtractInlineText(link) ?? link.Url ?? "";
-                    paragraph.Append(linkText, linkStyle);
-                    break;
-
-                case TaskList taskList:
-                    // TaskList inlines are handled at the item level, skip here
-                    break;
-
-                default:
-                    // Fallback for unknown inline types
-                    var defaultText = ExtractInlineText(inline) ?? "";
-                    paragraph.Append(defaultText, Style.Plain);
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
+        // Use the same advanced processing as ParagraphRenderer
+        ParagraphRenderer.ProcessInlineElements(paragraph, inlines, theme);
+    }    /// <summary>
     /// Extracts plain text from inline elements without markup.
     /// </summary>
     private static string ExtractInlineText(Inline inline)

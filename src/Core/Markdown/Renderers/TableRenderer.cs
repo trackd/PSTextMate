@@ -23,6 +23,7 @@ internal static class TableRenderer
     public static IRenderable? Render(Markdig.Extensions.Tables.Table table, Theme theme)
     {
         var spectreTable = new Spectre.Console.Table();
+        spectreTable.ShowFooters = false;
 
         // Configure table appearance
         spectreTable.Border = TableBorder.Rounded;
@@ -37,10 +38,23 @@ internal static class TableRenderer
         var headerRow = allRows.FirstOrDefault(r => r.isHeader);
         if (headerRow.cells?.Count > 0)
         {
-            foreach (var cell in headerRow.cells)
+            for (int i = 0; i < headerRow.cells.Count; i++)
             {
-                var headerStyle = GetHeaderStyle(theme);
-                spectreTable.AddColumn(new TableColumn(cell.Text).Header(new Text(cell.Text, headerStyle)));
+                var cell = headerRow.cells[i];
+                // Use constructor to set header text; this is the most compatible way
+                var column = new TableColumn(cell.Text);
+                // Apply alignment if Markdig specified one for the column
+                if (i < table.ColumnDefinitions.Count)
+                {
+                    column.Alignment = table.ColumnDefinitions[i].Alignment switch
+                    {
+                        TableColumnAlign.Left => Justify.Left,
+                        TableColumnAlign.Center => Justify.Center,
+                        TableColumnAlign.Right => Justify.Right,
+                        _ => Justify.Left
+                    };
+                }
+                spectreTable.AddColumn(column);
             }
         }
         else
@@ -49,9 +63,21 @@ internal static class TableRenderer
             var firstRow = allRows.FirstOrDefault();
             if (firstRow.cells?.Count > 0)
             {
-                foreach (var cell in firstRow.cells)
+                for (int i = 0; i < firstRow.cells.Count; i++)
                 {
-                    spectreTable.AddColumn(new TableColumn(cell.Text));
+                    var cell = firstRow.cells[i];
+                    var column = new TableColumn(cell.Text);
+                    if (i < table.ColumnDefinitions.Count)
+                    {
+                        column.Alignment = table.ColumnDefinitions[i].Alignment switch
+                        {
+                            TableColumnAlign.Left => Justify.Left,
+                            TableColumnAlign.Center => Justify.Center,
+                            TableColumnAlign.Right => Justify.Right,
+                            _ => Justify.Left
+                        };
+                    }
+                    spectreTable.AddColumn(column);
                 }
                 allRows = allRows.Skip(1).ToList();
             }

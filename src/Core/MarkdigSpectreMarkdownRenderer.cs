@@ -6,12 +6,13 @@ namespace PwshSpectreConsole.TextMate.Core;
 
 /// <summary>
 /// Legacy wrapper for the refactored markdown renderer.
-/// Maintains backward compatibility while delegating to the new modular implementation.
+/// Now uses the optimized renderer that builds Spectre.Console objects directly.
+/// This eliminates VT escaping issues and improves performance.
 /// </summary>
 internal static class MarkdigSpectreMarkdownRenderer
 {
     /// <summary>
-    /// Renders markdown content using Markdig and Spectre.Console.
+    /// Renders markdown content using the optimized Spectre.Console object building approach.
     /// </summary>
     /// <param name="markdown">Markdown text (can be multi-line)</param>
     /// <param name="theme">Theme object for styling</param>
@@ -19,6 +20,6 @@ internal static class MarkdigSpectreMarkdownRenderer
     /// <returns>Rows object for Spectre.Console rendering</returns>
     public static Rows Render(string markdown, Theme theme, ThemeName themeName)
     {
-        return Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
+        return Markdown.OptimizedMarkdownRenderer.Render(markdown, theme, themeName);
     }
 }

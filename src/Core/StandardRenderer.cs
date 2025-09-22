@@ -39,7 +39,7 @@ internal static class StandardRenderer
             ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
             ruleStack = result.RuleStack;
             TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback, lineIndex);
-            var lineMarkup = builder.ToString();
+            string? lineMarkup = builder.ToString();
             rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
             builder.Clear();
         }

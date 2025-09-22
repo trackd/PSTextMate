@@ -25,10 +25,10 @@ internal static class TableRenderer
         List<string>? headerCells = null;
         bool headerAdded = false;
 
-        var allRows = ExtractTableData(table, theme);
+        List<(bool isHeader, List<string> cells)> allRows = ExtractTableData(table, theme);
         int colCount = headerCells?.Count ?? 0;
 
-        foreach (var (isHeader, cells) in allRows)
+        foreach ((bool isHeader, List<string> cells) in allRows)
         {
             if (isHeader)
             {
@@ -65,7 +65,7 @@ internal static class TableRenderer
         {
             var cells = new List<string>();
 
-            foreach (TableCell cell in row)
+            foreach (TableCell cell in row.Cast<TableCell>())
             {
                 string cellText = ExtractCellText(cell, theme);
                 cells.Add(cellText);
@@ -84,7 +84,7 @@ internal static class TableRenderer
     {
         string cellText = string.Empty;
 
-        foreach (var cellBlock in cell)
+        foreach (Block cellBlock in cell)
         {
             if (cellBlock is ParagraphBlock para)
             {

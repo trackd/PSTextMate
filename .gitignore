@@ -5,3 +5,5 @@ src/.vs/*
 Module/lib
 debug.md
 output/*
+*/obj/*
+*/bin/*

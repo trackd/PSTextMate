@@ -33,7 +33,7 @@ internal static class QuoteRenderer
     {
         string quoteText = string.Empty;
 
-        foreach (var subBlock in quote)
+        foreach (Block subBlock in quote)
         {
             if (subBlock is ParagraphBlock para)
             {

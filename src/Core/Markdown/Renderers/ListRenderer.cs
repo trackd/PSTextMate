@@ -1,5 +1,7 @@
 using System.Text;
+using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
@@ -22,32 +24,10 @@ internal static class ListRenderer
         var items = new List<string>();
         int number = 1;
 
-        foreach (ListItemBlock item in list)
+        foreach (ListItemBlock item in list.Cast<ListItemBlock>())
         {
-            // Check if this is a task list item by looking for TaskList inline elements
-            bool isTaskList = false;
-            bool isChecked = false;
-
-            // Look for TaskList inline elements in the first paragraph
-            if (item.FirstOrDefault() is ParagraphBlock paragraph && paragraph.Inline is not null)
-            {
-                foreach (var inline in paragraph.Inline)
-                {
-                    // Check if this inline element is a TaskList from Markdig.Extensions.TaskLists
-                    var inlineType = inline.GetType();
-                    if (inlineType.Name == "TaskList" || inlineType.FullName?.Contains("TaskList") == true)
-                    {
-                        isTaskList = true;
-                        // Use reflection to get the Checked property
-                        var checkedProperty = inlineType.GetProperty("Checked");
-                        if (checkedProperty != null)
-                        {
-                            isChecked = (bool)(checkedProperty.GetValue(inline) ?? false);
-                        }
-                        break;
-                    }
-                }
-            }
+            // Check if this is a task list item using Markdig's native TaskList support
+            var (isTaskList, isChecked) = DetectTaskListItem(item);
 
             // Extract the text content (TaskList inlines are automatically excluded by InlineProcessor)
             string itemText = ExtractListItemText(item, theme);
@@ -55,8 +35,7 @@ internal static class ListRenderer
             string prefix;
             if (isTaskList)
             {
-                // prefix = isChecked ? "✅ " : "⬜ ";
-                prefix = isChecked ? "✅ " : "☐ ";
+                prefix = isChecked ? "✅ " : "⬜ ";  // More visible white square
             }
             else if (list.IsOrdered)
             {
@@ -74,13 +53,36 @@ internal static class ListRenderer
     }
 
     /// <summary>
+    /// Detects if a list item is a task list item using Markdig's native TaskList support.
+    /// </summary>
+    /// <param name="item">The list item to check</param>
+    /// <returns>A tuple indicating if it's a task list and if it's checked</returns>
+    private static (bool isTaskList, bool isChecked) DetectTaskListItem(ListItemBlock item)
+    {
+        // Look for TaskList inline elements in the first paragraph
+        if (item.FirstOrDefault() is ParagraphBlock paragraph && paragraph.Inline is not null)
+        {
+            foreach (Inline inline in paragraph.Inline)
+            {
+                // Use proper type checking with Markdig's TaskList type
+                if (inline is TaskList taskList)
+                {
+                    return (true, taskList.Checked);
+                }
+            }
+        }
+
+        return (false, false);
+    }
+
+    /// <summary>
     /// Extracts text content from a list item block.
     /// </summary>
     private static string ExtractListItemText(ListItemBlock item, Theme theme)
     {
         string itemText = string.Empty;
 
-        foreach (var subBlock in item)
+        foreach (Block subBlock in item)
         {
             if (subBlock is ParagraphBlock subPara)
             {
@@ -113,34 +115,12 @@ internal static class ListRenderer
     {
         var items = new List<string>();
         int number = 1;
-        string indent = new string(' ', indentLevel * 2);
+        string indent = new(' ', indentLevel * 2);
 
         foreach (ListItemBlock item in list)
         {
-            // Check if this is a task list item by looking for TaskList inline elements
-            bool isTaskList = false;
-            bool isChecked = false;
-
-            // Look for TaskList inline elements in the first paragraph
-            if (item.FirstOrDefault() is ParagraphBlock paragraph && paragraph.Inline is not null)
-            {
-                foreach (var inline in paragraph.Inline)
-                {
-                    // Check if this inline element is a TaskList from Markdig.Extensions.TaskLists
-                    var inlineType = inline.GetType();
-                    if (inlineType.Name == "TaskList" || inlineType.FullName?.Contains("TaskList") == true)
-                    {
-                        isTaskList = true;
-                        // Use reflection to get the Checked property
-                        var checkedProperty = inlineType.GetProperty("Checked");
-                        if (checkedProperty != null)
-                        {
-                            isChecked = (bool)(checkedProperty.GetValue(inline) ?? false);
-                        }
-                        break;
-                    }
-                }
-            }
+            // Check if this is a task list item using Markdig's native TaskList support
+            var (isTaskList, isChecked) = DetectTaskListItem(item);
 
             // Extract the text content
             string itemText = ExtractNestedListItemText(item, theme, indentLevel);
@@ -148,7 +128,7 @@ internal static class ListRenderer
             string prefix;
             if (isTaskList)
             {
-                prefix = isChecked ? "✅ " : "☐ ";
+                prefix = isChecked ? "✅ " : "⬜ ";  // More visible white square
             }
             else if (list.IsOrdered)
             {
@@ -176,7 +156,7 @@ internal static class ListRenderer
     {
         string itemText = string.Empty;
 
-        foreach (var subBlock in item)
+        foreach (Block subBlock in item)
         {
             if (subBlock is ParagraphBlock subPara)
             {

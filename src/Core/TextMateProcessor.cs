@@ -49,7 +49,7 @@ public static class TextMateProcessor
 
         try
         {
-            var (registry, theme) = CacheManager.GetCachedTheme(themeName);
+            (TextMateSharp.Registry.Registry registry, Theme theme) = CacheManager.GetCachedTheme(themeName);
             IGrammar? grammar = CacheManager.GetCachedGrammar(registry, grammarId, isExtension);
 
             if (grammar is null)
@@ -94,7 +94,7 @@ public static class TextMateProcessor
 
         try
         {
-            var (registry, theme) = CacheManager.GetCachedTheme(themeName);
+            (TextMateSharp.Registry.Registry registry, Theme theme) = CacheManager.GetCachedTheme(themeName);
             IGrammar? grammar = CacheManager.GetCachedGrammar(registry, grammarId, isExtension);
 
             if (grammar is null)
@@ -137,7 +137,7 @@ public static class TextMateProcessor
             ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
             ruleStack = result.RuleStack;
             TokenProcessor.ProcessTokensBatchNoEscape(result.Tokens, line, theme, builder, null, lineIndex);
-            var lineMarkup = builder.ToString();
+            string lineMarkup = builder.ToString();
             rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
             builder.Clear();
         }

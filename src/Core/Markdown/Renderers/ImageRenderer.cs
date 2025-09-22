@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Reflection;
 using PwshSpectreConsole.TextMate.Core.Helpers;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -46,7 +41,7 @@ internal static class ImageRenderer
 
             // Use a timeout for image processing
             string? localImagePath = null;
-            var imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl));
+            Task<string?> imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl));
 
             if (imageTask.Wait(ImageTimeout))
             {
@@ -80,8 +75,8 @@ internal static class ImageRenderer
             }
 
             // Set reasonable defaults for markdown display
-            var defaultMaxWidth = maxWidth ?? 80;  // Default to ~80 characters wide for terminal display
-            var defaultMaxHeight = maxHeight ?? 30; // Default to ~30 lines high
+            int defaultMaxWidth = maxWidth ?? 80;  // Default to ~80 characters wide for terminal display
+            int defaultMaxHeight = maxHeight ?? 30; // Default to ~30 lines high
 
             if (TryCreateSixelImage(localImagePath, defaultMaxWidth, defaultMaxHeight, out var sixelImage) && sixelImage is not null)
             {
@@ -122,7 +117,7 @@ internal static class ImageRenderer
 
             // Use a timeout for image processing
             string? localImagePath = null;
-            var imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl));
+            Task<string?>? imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl));
 
             if (imageTask.Wait(ImageTimeout))
             {
@@ -140,8 +135,8 @@ internal static class ImageRenderer
             }
 
             // Smaller defaults for inline images
-            var width = maxWidth ?? 60;  // Default max width for inline images
-            var height = maxHeight ?? 20; // Default max height for inline images
+            int width = maxWidth ?? 60;  // Default max width for inline images
+            int height = maxHeight ?? 20; // Default max height for inline images
 
             if (TryCreateSixelImage(localImagePath, width, height, out var sixelImage) && sixelImage is not null)
             {
@@ -185,9 +180,9 @@ internal static class ImageRenderer
             // If that fails, search through loaded assemblies
             if (sixelImageType is null)
             {
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    var assemblyName = assembly.GetName().Name;
+                    string? assemblyName = assembly.GetName().Name;
                     if (assemblyName?.Contains("Spectre.Console") == true)
                     {
                         // SixelImage is in Spectre.Console namespace regardless of assembly
@@ -203,15 +198,14 @@ internal static class ImageRenderer
             if (sixelImageType is null)
             {
                 // Debug: Let's see what Spectre.Console types are available
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     if (assembly.GetName().Name?.Contains("Spectre.Console") == true)
                     {
-                        var spectreTypes = assembly.GetTypes()
+                        string?[]? spectreTypes = [.. assembly.GetTypes()
                             .Where(t => t.Name.Contains("Sixel", StringComparison.OrdinalIgnoreCase))
                             .Select(t => t.FullName)
-                            .Where(name => name is not null)
-                            .ToArray();
+                            .Where(name => name is not null)];
 
                         if (spectreTypes.Length > 0)
                         {
@@ -229,13 +223,13 @@ internal static class ImageRenderer
             }
 
             // Create SixelImage instance
-            var constructor = sixelImageType.GetConstructor([typeof(string), typeof(bool)]);
+            ConstructorInfo? constructor = sixelImageType.GetConstructor([typeof(string), typeof(bool)]);
             if (constructor is null)
             {
                 return false;
             }
 
-            var sixelInstance = constructor.Invoke([imagePath, false]); // false = animation enabled
+            object? sixelInstance = constructor.Invoke([imagePath, false]); // false = animation enabled
             if (sixelInstance is null)
             {
                 return false;
@@ -244,7 +238,7 @@ internal static class ImageRenderer
             // Apply size constraints if available
             if (maxWidth.HasValue)
             {
-                var maxWidthProperty = sixelImageType.GetProperty("MaxWidth");
+                PropertyInfo? maxWidthProperty = sixelImageType.GetProperty("MaxWidth");
                 if (maxWidthProperty is not null && maxWidthProperty.CanWrite)
                 {
                     maxWidthProperty.SetValue(sixelInstance, maxWidth.Value);
@@ -252,7 +246,7 @@ internal static class ImageRenderer
                 else
                 {
                     // Try method-based approach as fallback
-                    var maxWidthMethod = sixelImageType.GetMethod("MaxWidth");
+                    MethodInfo? maxWidthMethod = sixelImageType.GetMethod("MaxWidth");
                     if (maxWidthMethod is not null)
                     {
                         sixelInstance = maxWidthMethod.Invoke(sixelInstance, [maxWidth.Value]);
@@ -262,15 +256,15 @@ internal static class ImageRenderer
 
             if (maxHeight.HasValue)
             {
-                var maxHeightProperty = sixelImageType.GetProperty("MaxHeight");
-                if (maxHeightProperty is not null && maxHeightProperty.CanWrite)
+                PropertyInfo? maxHeightProperty = sixelImageType.GetProperty("MaxHeight");
+                if (maxHeightProperty?.CanWrite == true)
                 {
                     maxHeightProperty.SetValue(sixelInstance, maxHeight.Value);
                 }
                 else
                 {
                     // Try method-based approach as fallback
-                    var maxHeightMethod = sixelImageType.GetMethod("MaxHeight");
+                    MethodInfo? maxHeightMethod = sixelImageType.GetMethod("MaxHeight");
                     if (maxHeightMethod is not null)
                     {
                         sixelInstance = maxHeightMethod.Invoke(sixelInstance, [maxHeight.Value]);
@@ -301,8 +295,8 @@ internal static class ImageRenderer
     /// <returns>A markup string representing the image as a link</returns>
     private static Markup CreateImageFallback(string altText, string imageUrl)
     {
-        var linkText = $"🖼️ Image: {altText.EscapeMarkup()}";
-        var linkMarkup = $"[blue link={imageUrl.EscapeMarkup()}]{linkText}[/]";
+        string? linkText = $"🖼️ Image: {altText.EscapeMarkup()}";
+        string? linkMarkup = $"[blue link={imageUrl.EscapeMarkup()}]{linkText}[/]";
         return new Markup(linkMarkup);
     }
 
@@ -318,16 +312,14 @@ internal static class ImageRenderer
         try
         {
             var fileInfo = new System.IO.FileInfo(localPath);
-            var sizeText = fileInfo.Exists ? $" ({fileInfo.Length / 1024:N0} KB)" : "";
+            string? sizeText = fileInfo.Exists ? $" ({fileInfo.Length / 1024:N0} KB)" : "";
 
             var content = new Markup($"🖼️ [blue link={imageUrl.EscapeMarkup()}]{altText.EscapeMarkup()}[/]{sizeText}");
 
-            var panel = new Panel(content)
+            return new Panel(content)
                 .Header("[grey]Image (Sixel not available)[/]")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Grey);
-
-            return panel;
         }
         catch
         {
@@ -343,8 +335,8 @@ internal static class ImageRenderer
     /// <returns>A markup string representing the image as a link</returns>
     private static Markup CreateImageFallbackInline(string altText, string imageUrl)
     {
-        var linkText = $"🖼️ {altText.EscapeMarkup()}";
-        var linkMarkup = $"[blue link={imageUrl.EscapeMarkup()}]{linkText}[/]";
+        string? linkText = $"🖼️ {altText.EscapeMarkup()}";
+        string? linkMarkup = $"[blue link={imageUrl.EscapeMarkup()}]{linkText}[/]";
         return new Markup(linkMarkup);
     }
 
@@ -412,9 +404,9 @@ internal static class ImageRenderer
                 return true;
 
             // Search through loaded assemblies
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                var assemblyName = assembly.GetName().Name;
+                string? assemblyName = assembly.GetName().Name;
                 if (assemblyName?.Contains("Spectre.Console") == true)
                 {
                     sixelImageType = assembly.GetType("Spectre.Console.SixelImage");

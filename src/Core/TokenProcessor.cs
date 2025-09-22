@@ -34,9 +34,9 @@ internal static class TokenProcessor
 
             if (startIndex >= endIndex) continue;
 
-            var textSpan = line.SubstringAsSpan(startIndex, endIndex);
-            var (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
-            var (escapedText, style) = WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme);
+            ReadOnlySpan<char> textSpan = line.SubstringAsSpan(startIndex, endIndex);
+            (int foreground, int background, FontStyle fontStyle) = ExtractThemeProperties(token, theme);
+            (string escapedText, Style? style) = WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme);
 
             builder.AppendWithStyle(style, escapedText);
 
@@ -81,9 +81,9 @@ internal static class TokenProcessor
 
             if (startIndex >= endIndex) continue;
 
-            var textSpan = line.SubstringAsSpan(startIndex, endIndex);
-            var (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
-            var (processedText, style) = WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme, escapeMarkup: false);
+            ReadOnlySpan<char> textSpan = line.SubstringAsSpan(startIndex, endIndex);
+            (int foreground, int background, FontStyle fontStyle) = ExtractThemeProperties(token, theme);
+            (string processedText, Style? style) = WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme, escapeMarkup: false);
 
             builder.AppendWithStyle(style, processedText);
 
@@ -109,7 +109,7 @@ internal static class TokenProcessor
         int background = -1;
         FontStyle fontStyle = FontStyle.NotSet;
 
-        foreach (var themeRule in theme.Match(token.Scopes))
+        foreach (ThemeTrieElementRule? themeRule in theme.Match(token.Scopes))
         {
             if (foreground == -1 && themeRule.foreground > 0)
                 foreground = themeRule.foreground;

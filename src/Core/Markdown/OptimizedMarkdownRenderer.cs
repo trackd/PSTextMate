@@ -1,4 +1,4 @@
-using Markdig;
+﻿using Markdig;
 using PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -8,13 +8,14 @@ using TextMateSharp.Themes;
 namespace PwshSpectreConsole.TextMate.Core.Markdown;
 
 /// <summary>
-/// Main markdown renderer using Markdig for parsing and Spectre.Console for rendering.
-/// Renders GitHub-style markdown as closely as possible in the console.
+/// Optimized markdown renderer that builds Spectre.Console objects directly instead of markup strings.
+/// This eliminates VT escaping issues and avoids double-parsing overhead for better performance.
 /// </summary>
-internal static class MarkdownRenderer
+internal static class OptimizedMarkdownRenderer
 {
     /// <summary>
-    /// Renders markdown content using Markdig and Spectre.Console.
+    /// Renders markdown content using optimized Spectre.Console object building.
+    /// This approach eliminates VT escaping issues and improves performance.
     /// </summary>
     /// <param name="markdown">Markdown text (can be multi-line)</param>
     /// <param name="theme">Theme object for styling</param>
@@ -31,7 +32,9 @@ internal static class MarkdownRenderer
         for (int i = 0; i < document.Count; i++)
         {
             Markdig.Syntax.Block? block = document[i];
-            IRenderable? renderable = BlockRenderer.RenderBlock(block, theme, themeName);
+
+            // Use optimized block renderer that builds Spectre.Console objects directly
+            IRenderable? renderable = OptimizedBlockRenderer.RenderBlock(block, theme, themeName);
 
             if (renderable is not null)
             {

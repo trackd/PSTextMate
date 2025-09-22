@@ -21,14 +21,14 @@ internal static class CodeBlockRenderer
     /// <returns>Rendered code block in a panel</returns>
     public static IRenderable RenderFencedCodeBlock(FencedCodeBlock fencedCode, Theme theme, ThemeName themeName)
     {
-        var codeLines = ExtractCodeLines(fencedCode.Lines);
-        var language = (fencedCode.Info ?? string.Empty).Trim();
+        List<string> codeLines = ExtractCodeLines(fencedCode.Lines);
+        string language = (fencedCode.Info ?? string.Empty).Trim();
 
         if (!string.IsNullOrEmpty(language))
         {
             try
             {
-                var rows = TextMateProcessor.ProcessLinesCodeBlock(codeLines.ToArray(), themeName, language, false);
+                Rows? rows = TextMateProcessor.ProcessLinesCodeBlock(codeLines.ToArray(), themeName, language, false);
                 if (rows is not null)
                 {
                     return new Panel(rows)
@@ -54,7 +54,7 @@ internal static class CodeBlockRenderer
     /// <returns>Rendered code block in a panel</returns>
     public static IRenderable RenderCodeBlock(CodeBlock code, Theme theme)
     {
-        var codeText = Markup.Escape(code.Lines.ToString());
+        string? codeText = Markup.Escape(code.Lines.ToString());
         var codeStyle = new Style(foreground: Color.Grey, background: Color.Black);
 
         return new Panel(new Markup(codeText, codeStyle))
@@ -69,9 +69,9 @@ internal static class CodeBlockRenderer
     {
         var codeLines = new List<string>();
 
-        foreach (var line in lines.Lines)
+        foreach (Markdig.Helpers.StringLine line in lines.Lines)
         {
-            var slice = line.Slice;
+            Markdig.Helpers.StringSlice slice = line.Slice;
             codeLines.Add(slice.ToString());
         }
 
@@ -83,9 +83,9 @@ internal static class CodeBlockRenderer
     /// </summary>
     private static Panel CreateFallbackCodePanel(List<string> codeLines, string language, Theme theme)
     {
-        var fallbackText = Markup.Escape(string.Join("\n", codeLines));
-        var fallbackStyle = theme.ToSpectreStyle();
-        var headerText = !string.IsNullOrEmpty(language) ? language : "code";
+        string? fallbackText = Markup.Escape(string.Join("\n", codeLines));
+        Style? fallbackStyle = theme.ToSpectreStyle();
+        string? headerText = !string.IsNullOrEmpty(language) ? language : "code";
 
         return new Panel(new Markup(fallbackText, fallbackStyle))
             .Border(BoxBorder.Rounded)

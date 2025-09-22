@@ -69,7 +69,7 @@ internal static class MarkdownRenderer
                 Text = line,
                 // You can add more fields if you refactor ProcessMarkdownTokens
             });
-            var lineMarkup = builder.ToString();
+            string? lineMarkup = builder.ToString();
             rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
             builder.Clear();
         }
@@ -121,9 +121,9 @@ internal static class MarkdownRenderer
 
             if (startIndex >= endIndex) continue;
 
-            var textSpan = line.SubstringAsSpan(startIndex, endIndex);
-            var (foreground, background, fontStyle) = TokenProcessor.ExtractThemeProperties(token, theme);
-            var (escapedText, style) = TokenProcessor.WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme);
+            ReadOnlySpan<char> textSpan = line.SubstringAsSpan(startIndex, endIndex);
+            (int foreground, int background, FontStyle fontStyle) = TokenProcessor.ExtractThemeProperties(token, theme);
+            (string escapedText, Style? style) = TokenProcessor.WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme);
 
             builder.AppendWithStyle(style, escapedText);
         }

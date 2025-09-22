@@ -28,7 +28,7 @@ internal static class ParagraphRenderer
             // For paragraphs containing images, use synchronous rendering with Sixel support
             try
             {
-                var result = RenderParagraphWithImages(paragraph, theme, imageLinks);
+                IRenderable? result = RenderParagraphWithImages(paragraph, theme, imageLinks);
                 return result;
             }
             catch
@@ -38,8 +38,8 @@ internal static class ParagraphRenderer
         }
 
         // Standard text-only paragraph processing
-        var paraScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Paragraph");
-        var (pfg, pbg, pfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(paraScopes), theme);
+        string[] paraScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Paragraph");
+        (int pfg, int pbg, FontStyle pfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(paraScopes), theme);
 
         var paraBuilder = new StringBuilder();
         InlineProcessor.ExtractInlineText(paragraph.Inline, theme, paraBuilder);
@@ -50,9 +50,9 @@ internal static class ParagraphRenderer
         // Apply the theme colors/style to the paragraph
         if (pfg != -1 || pbg != -1 || pfs != TextMateSharp.Themes.FontStyle.NotSet)
         {
-            var paraColor = pfg != -1 ? StyleHelper.GetColor(pfg, theme) : Color.Default;
-            var paraBgColor = pbg != -1 ? StyleHelper.GetColor(pbg, theme) : Color.Default;
-            var paraDecoration = StyleHelper.GetDecoration(pfs);
+            Color paraColor = pfg != -1 ? StyleHelper.GetColor(pfg, theme) : Color.Default;
+            Color paraBgColor = pbg != -1 ? StyleHelper.GetColor(pbg, theme) : Color.Default;
+            Decoration paraDecoration = StyleHelper.GetDecoration(pfs);
 
             var paraStyle = new Style(paraColor, paraBgColor, paraDecoration);
             var styledBuilder = new StringBuilder();
@@ -73,13 +73,13 @@ internal static class ParagraphRenderer
     /// <returns>True if the paragraph contains any images</returns>
     private static bool ContainsImages(ParagraphBlock paragraph, out List<LinkInline> imageLinks)
     {
-        imageLinks = new List<LinkInline>();
+        imageLinks = [];
 
         if (paragraph.Inline is null)
             return false;
 
         // Find all image links in the paragraph
-        foreach (var inline in paragraph.Inline)
+        foreach (Inline inline in paragraph.Inline)
         {
             if (inline is LinkInline link && link.IsImage)
             {
@@ -100,7 +100,7 @@ internal static class ParagraphRenderer
         // If the paragraph contains only a single image, render it as a standalone image
         if (IsImageOnlyParagraph(paragraph, imageLinks))
         {
-            var singleImage = imageLinks[0];
+            LinkInline singleImage = imageLinks[0];
             return ImageRenderer.RenderImage(
                 singleImage.Title ?? singleImage.Label ?? "Image",
                 singleImage.Url ?? string.Empty);
@@ -110,14 +110,14 @@ internal static class ParagraphRenderer
         var renderables = new List<IRenderable>();
         var currentTextBuilder = new StringBuilder();
 
-        foreach (var inline in paragraph.Inline!)
+        foreach (Inline inline in paragraph.Inline!)
         {
             if (inline is LinkInline link && link.IsImage)
             {
                 // If we have accumulated text, add it first
                 if (currentTextBuilder.Length > 0)
                 {
-                    var textContent = currentTextBuilder.ToString().Trim();
+                    string textContent = currentTextBuilder.ToString().Trim();
                     if (!string.IsNullOrEmpty(textContent))
                     {
                         // Apply paragraph styling to the text
@@ -128,7 +128,7 @@ internal static class ParagraphRenderer
                 }
 
                 // Add the image as an inline element
-                var imageRenderable = ImageRenderer.RenderImageInline(
+                IRenderable? imageRenderable = ImageRenderer.RenderImageInline(
                     link.Title ?? link.Label ?? "Image",
                     link.Url ?? string.Empty,
                     maxWidth: 60,  // Smaller for inline images
@@ -145,10 +145,10 @@ internal static class ParagraphRenderer
         // Add any remaining text
         if (currentTextBuilder.Length > 0)
         {
-            var textContent = currentTextBuilder.ToString().Trim();
+            string? textContent = currentTextBuilder.ToString().Trim();
             if (!string.IsNullOrEmpty(textContent))
             {
-                var textMarkup = ApplyParagraphStyling(textContent, theme);
+                Markup? textMarkup = ApplyParagraphStyling(textContent, theme);
                 renderables.Add(textMarkup);
             }
         }
@@ -185,15 +185,15 @@ internal static class ParagraphRenderer
     /// <returns>Styled markup</returns>
     private static Markup ApplyParagraphStyling(string text, Theme theme)
     {
-        var paraScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Paragraph");
-        var (pfg, pbg, pfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(paraScopes), theme);
+        string[]? paraScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Paragraph");
+        (int pfg, int pbg, FontStyle pfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(paraScopes), theme);
 
         // Apply the theme colors/style to the paragraph
         if (pfg != -1 || pbg != -1 || pfs != TextMateSharp.Themes.FontStyle.NotSet)
         {
-            var paraColor = pfg != -1 ? StyleHelper.GetColor(pfg, theme) : Color.Default;
-            var paraBgColor = pbg != -1 ? StyleHelper.GetColor(pbg, theme) : Color.Default;
-            var paraDecoration = StyleHelper.GetDecoration(pfs);
+            Color paraColor = pfg != -1 ? StyleHelper.GetColor(pfg, theme) : Color.Default;
+            Color paraBgColor = pbg != -1 ? StyleHelper.GetColor(pbg, theme) : Color.Default;
+            Decoration paraDecoration = StyleHelper.GetDecoration(pfs);
 
             var paraStyle = new Style(paraColor, paraBgColor, paraDecoration);
             var styledBuilder = new StringBuilder();

@@ -20,12 +20,12 @@ internal static class HtmlBlockRenderer
     /// <returns>Rendered HTML block in a panel</returns>
     public static IRenderable Render(HtmlBlock htmlBlock, Theme theme, ThemeName themeName)
     {
-        var htmlLines = ExtractHtmlLines(htmlBlock);
+        List<string> htmlLines = ExtractHtmlLines(htmlBlock);
 
         // Try to render with HTML syntax highlighting
         try
         {
-            var htmlRows = TextMateProcessor.ProcessLinesCodeBlock([.. htmlLines], themeName, "html", false);
+            Rows? htmlRows = TextMateProcessor.ProcessLinesCodeBlock([.. htmlLines], themeName, "html", false);
             if (htmlRows is not null)
             {
                 return new Panel(htmlRows)
@@ -51,7 +51,7 @@ internal static class HtmlBlockRenderer
 
         for (int i = 0; i < htmlBlock.Lines.Count; i++)
         {
-            var line = htmlBlock.Lines.Lines[i];
+            Markdig.Helpers.StringLine line = htmlBlock.Lines.Lines[i];
             htmlLines.Add(line.Slice.ToString());
         }
 
@@ -63,7 +63,7 @@ internal static class HtmlBlockRenderer
     /// </summary>
     private static Panel CreateFallbackHtmlPanel(List<string> htmlLines)
     {
-        var htmlText = Markup.Escape(string.Join("\n", htmlLines));
+        string? htmlText = Markup.Escape(string.Join("\n", htmlLines));
 
         return new Panel(new Markup(htmlText))
             .Border(BoxBorder.Rounded)

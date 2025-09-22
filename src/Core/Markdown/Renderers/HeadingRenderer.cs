@@ -20,8 +20,8 @@ internal static class HeadingRenderer
     /// <returns>Rendered heading markup</returns>
     public static IRenderable Render(HeadingBlock heading, Theme theme)
     {
-        var headingScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Heading", heading.Level);
-        var (hfg, hbg, hfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(headingScopes), theme);
+        string[]? headingScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Heading", heading.Level);
+        (int hfg, int hbg, FontStyle hfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(headingScopes), theme);
 
         var headingBuilder = new StringBuilder();
         InlineProcessor.ExtractInlineText(heading.Inline, theme, headingBuilder);
@@ -29,9 +29,9 @@ internal static class HeadingRenderer
         // Apply the theme colors/style to the heading
         if (hfg != -1 || hbg != -1 || hfs != TextMateSharp.Themes.FontStyle.NotSet)
         {
-            var headingColor = hfg != -1 ? StyleHelper.GetColor(hfg, theme) : Color.Default;
-            var headingBgColor = hbg != -1 ? StyleHelper.GetColor(hbg, theme) : Color.Default;
-            var headingDecoration = StyleHelper.GetDecoration(hfs);
+            Color headingColor = hfg != -1 ? StyleHelper.GetColor(hfg, theme) : Color.Default;
+            Color headingBgColor = hbg != -1 ? StyleHelper.GetColor(hbg, theme) : Color.Default;
+            Decoration headingDecoration = StyleHelper.GetDecoration(hfs);
 
             var headingStyle = new Style(headingColor, headingBgColor, headingDecoration);
             var styledBuilder = new StringBuilder();

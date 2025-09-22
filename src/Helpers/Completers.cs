@@ -1,7 +1,4 @@
-﻿
-using System;
-using System.Linq;
-using System.Management.Automation;
+﻿using System.Management.Automation;
 
 namespace PwshSpectreConsole.TextMate;
 public class TextMateLanguages : IValidateSetValuesGenerator
@@ -23,11 +20,12 @@ public class TextMateExtensions : IValidateSetValuesGenerator
     }
     public static bool IsSupportedExtension(string extension)
     {
-        return TextMateHelper.Extensions.Contains(extension);
+        return TextMateHelper.Extensions?.Contains(extension) == true;
     }
     public static bool IsSupportedFile(string file)
     {
-        return TextMateHelper.Extensions.Contains(System.IO.Path.GetExtension(file));
+        string ext = Path.GetExtension(file);
+        return TextMateHelper.Extensions?.Contains(ext) == true;
     }
 
 }
@@ -39,7 +37,7 @@ public class TextMateExtensionTransform : ArgumentTransformationAttribute
         {
             return input.StartsWith('.') ? input : '.' + input;
         }
-        return inputData;
+        throw new ArgumentException("Input must be a string representing a file extension., '.ext' format expected.", nameof(inputData));
     }
 
 }

@@ -1,4 +1,4 @@
-﻿# Optimized Rendering Test File
+﻿# Markdown Rendering Test File
 
 ## Code Blocks Test
 

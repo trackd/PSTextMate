@@ -1,252 +1,165 @@
-using System.Linq;
-using System.Text;
-using Markdig.Syntax;
+﻿using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using PwshSpectreConsole.TextMate.Extensions;
 using TextMateSharp.Themes;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
 /// <summary>
-/// Renders markdown paragraph blocks.
+/// Paragraph renderer that builds Spectre.Console objects directly instead of markup strings.
+/// This eliminates VT escaping issues and avoids double-parsing overhead.
 /// </summary>
 internal static class ParagraphRenderer
 {
     /// <summary>
-    /// Renders a paragraph block with theme-aware styling.
+    /// Renders a paragraph block by building Spectre.Console Paragraph objects directly.
+    /// This approach eliminates VT escaping issues and improves performance.
     /// </summary>
     /// <param name="paragraph">The paragraph block to render</param>
     /// <param name="theme">Theme for styling</param>
-    /// <returns>Rendered paragraph markup or empty text if no content</returns>
+    /// <returns>Rendered paragraph as a Paragraph object with proper inline styling</returns>
     public static IRenderable Render(ParagraphBlock paragraph, Theme theme)
     {
-        // Check if this paragraph contains any images
-        if (ContainsImages(paragraph, out var imageLinks))
+        var spectreConsole = new Paragraph();
+
+        if (paragraph.Inline is not null)
         {
-            // For paragraphs containing images, use synchronous rendering with Sixel support
-            try
-            {
-                IRenderable? result = RenderParagraphWithImages(paragraph, theme, imageLinks);
-                return result;
-            }
-            catch
-            {
-                // Fall back to text processing if image rendering fails
-            }
+            ProcessInlineElements(spectreConsole, paragraph.Inline, theme);
         }
 
-        // Standard text-only paragraph processing
-        string[] paraScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Paragraph");
-        (int pfg, int pbg, FontStyle pfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(paraScopes), theme);
+        return spectreConsole;
+    }
 
-        var paraBuilder = new StringBuilder();
-        InlineProcessor.ExtractInlineText(paragraph.Inline, theme, paraBuilder);
-
-        if (paraBuilder.Length == 0 || string.IsNullOrWhiteSpace(paraBuilder.ToString()))
-            return Text.Empty;
-
-        // Apply the theme colors/style to the paragraph
-        if (pfg != -1 || pbg != -1 || pfs != TextMateSharp.Themes.FontStyle.NotSet)
+    /// <summary>
+    /// Processes inline elements and adds them directly to the Paragraph with appropriate styling.
+    /// </summary>
+    private static void ProcessInlineElements(Paragraph paragraph, ContainerInline inlines, Theme theme)
+    {
+        foreach (Inline inline in inlines)
         {
-            Color paraColor = pfg != -1 ? StyleHelper.GetColor(pfg, theme) : Color.Default;
-            Color paraBgColor = pbg != -1 ? StyleHelper.GetColor(pbg, theme) : Color.Default;
-            Decoration paraDecoration = StyleHelper.GetDecoration(pfs);
+            switch (inline)
+            {
+                case LiteralInline literal:
+                    var literalText = literal.Content.ToString();
+                    paragraph.Append(literalText, Style.Plain);
+                    break;
 
-            var paraStyle = new Style(paraColor, paraBgColor, paraDecoration);
-            var styledBuilder = new StringBuilder();
-            styledBuilder.AppendWithStyle(paraStyle, paraBuilder.ToString());
-            return new Markup(styledBuilder.ToString());
-        }
-        else
-        {
-            return new Markup(paraBuilder.ToString());
+                case EmphasisInline emphasis:
+                    ProcessEmphasisInline(paragraph, emphasis, theme);
+                    break;
+
+                case CodeInline code:
+                    ProcessCodeInline(paragraph, code, theme);
+                    break;
+
+                case LinkInline link:
+                    ProcessLinkInline(paragraph, link, theme);
+                    break;
+
+                case Markdig.Extensions.TaskLists.TaskList taskList:
+                    // TaskList items are handled at the list level, skip here
+                    break;
+
+                case LineBreakInline:
+                    paragraph.Append("\n", Style.Plain);
+                    break;
+
+                case HtmlInline html:
+                    // For HTML inlines, just extract the text content
+                    var htmlText = html.Tag ?? "";
+                    paragraph.Append(htmlText, Style.Plain);
+                    break;
+
+                default:
+                    // Fallback for unknown inline types - extract text
+                    var defaultText = ExtractInlineText(inline);
+                    paragraph.Append(defaultText, Style.Plain);
+                    break;
+            }
         }
     }
 
     /// <summary>
-    /// Checks if a paragraph contains any image links.
+    /// Processes emphasis (bold/italic) inline elements.
     /// </summary>
-    /// <param name="paragraph">The paragraph to check</param>
-    /// <param name="imageLinks">The found image links</param>
-    /// <returns>True if the paragraph contains any images</returns>
-    private static bool ContainsImages(ParagraphBlock paragraph, out List<LinkInline> imageLinks)
+    private static void ProcessEmphasisInline(Paragraph paragraph, EmphasisInline emphasis, Theme theme)
     {
-        imageLinks = [];
-
-        if (paragraph.Inline is null)
-            return false;
-
-        // Find all image links in the paragraph
-        foreach (Inline inline in paragraph.Inline)
+        // Determine emphasis style based on delimiter count
+        var decoration = emphasis.DelimiterCount switch
         {
-            if (inline is LinkInline link && link.IsImage)
-            {
-                imageLinks.Add(link);
-            }
-        }
+            1 => Decoration.Italic,      // Single * or _
+            2 => Decoration.Bold,        // Double ** or __
+            3 => Decoration.Bold | Decoration.Italic, // Triple *** or ___
+            _ => Decoration.None
+        };
 
-        return imageLinks.Count > 0;
-    }    /// <summary>
-    /// Renders a paragraph that contains images, handling both text and Sixel images.
-    /// </summary>
-    /// <param name="paragraph">The paragraph to render</param>
-    /// <param name="theme">Theme for styling</param>
-    /// <param name="imageLinks">The image links found in the paragraph</param>
-    /// <returns>A renderable containing the mixed content</returns>
-    private static IRenderable RenderParagraphWithImages(ParagraphBlock paragraph, Theme theme, List<LinkInline> imageLinks)
-    {
-        // If the paragraph contains only a single image, render it as a standalone image
-        if (IsImageOnlyParagraph(paragraph, imageLinks))
-        {
-            LinkInline singleImage = imageLinks[0];
-            return ImageRenderer.RenderImage(
-                singleImage.Title ?? singleImage.Label ?? "Image",
-                singleImage.Url ?? string.Empty);
-        }
+        var emphasisStyle = new Style(decoration: decoration);
+        var emphasisText = ExtractInlineText(emphasis);
 
-        // For mixed content, we need to create a composite layout
-        var renderables = new List<IRenderable>();
-        var currentTextBuilder = new StringBuilder();
-
-        foreach (Inline inline in paragraph.Inline!)
-        {
-            if (inline is LinkInline link && link.IsImage)
-            {
-                // If we have accumulated text, add it first
-                if (currentTextBuilder.Length > 0)
-                {
-                    string textContent = currentTextBuilder.ToString().Trim();
-                    if (!string.IsNullOrEmpty(textContent))
-                    {
-                        // Apply paragraph styling to the text
-                        var textMarkup = ApplyParagraphStyling(textContent, theme);
-                        renderables.Add(textMarkup);
-                    }
-                    currentTextBuilder.Clear();
-                }
-
-                // Add the image as an inline element
-                IRenderable? imageRenderable = ImageRenderer.RenderImageInline(
-                    link.Title ?? link.Label ?? "Image",
-                    link.Url ?? string.Empty,
-                    maxWidth: 60,  // Smaller for inline images
-                    maxHeight: 20);
-                renderables.Add(imageRenderable);
-            }
-            else
-            {
-                // Process non-image inline elements
-                ProcessNonImageInline(inline, theme, currentTextBuilder);
-            }
-        }
-
-        // Add any remaining text
-        if (currentTextBuilder.Length > 0)
-        {
-            string? textContent = currentTextBuilder.ToString().Trim();
-            if (!string.IsNullOrEmpty(textContent))
-            {
-                Markup? textMarkup = ApplyParagraphStyling(textContent, theme);
-                renderables.Add(textMarkup);
-            }
-        }
-
-        // If we only have one renderable, return it directly
-        if (renderables.Count == 1)
-        {
-            return renderables[0];
-        }
-
-        // For multiple renderables, combine them in a layout that flows better
-        // Use a Columns layout for better inline flow when possible
-        if (renderables.Count <= 3 && renderables.All(r => r is Markup || IsCompactImage(r)))
-        {
-            try
-            {
-                return new Columns(renderables.ToArray());
-            }
-            catch
-            {
-                // Fall back to vertical layout if columns fail
-            }
-        }
-
-        // Default to vertical layout for complex mixed content
-        return new Rows(renderables);
+        paragraph.Append(emphasisText, emphasisStyle);
     }
 
     /// <summary>
-    /// Applies paragraph styling to text content.
+    /// Processes inline code elements with syntax highlighting.
     /// </summary>
-    /// <param name="text">The text to style</param>
-    /// <param name="theme">Theme for styling</param>
-    /// <returns>Styled markup</returns>
-    private static Markup ApplyParagraphStyling(string text, Theme theme)
+    private static void ProcessCodeInline(Paragraph paragraph, CodeInline code, Theme theme)
     {
-        string[]? paraScopes = MarkdigTextMateScopeMapper.GetBlockScopes("Paragraph");
-        (int pfg, int pbg, FontStyle pfs) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(paraScopes), theme);
+        // Get theme colors for inline code
+        var codeScopes = new[] { "markup.inline.raw" };
+        var (codeFg, codeBg, codeFs) = TokenProcessor.ExtractThemeProperties(
+            new MarkdownToken(codeScopes), theme);
 
-        // Apply the theme colors/style to the paragraph
-        if (pfg != -1 || pbg != -1 || pfs != TextMateSharp.Themes.FontStyle.NotSet)
+        // Create code styling
+        Color? foregroundColor = codeFg != -1 ? StyleHelper.GetColor(codeFg, theme) : Color.Yellow;
+        Color? backgroundColor = codeBg != -1 ? StyleHelper.GetColor(codeBg, theme) : Color.Grey11;
+        var decoration = StyleHelper.GetDecoration(codeFs);
+
+        var codeStyle = new Style(foregroundColor, backgroundColor, decoration);
+        paragraph.Append(code.Content, codeStyle);
+    }
+
+    /// <summary>
+    /// Processes link inline elements.
+    /// </summary>
+    private static void ProcessLinkInline(Paragraph paragraph, LinkInline link, Theme theme)
+    {
+        // Get theme colors for links
+        var linkScopes = new[] { "markup.underline.link" };
+        var (linkFg, linkBg, linkFs) = TokenProcessor.ExtractThemeProperties(
+            new MarkdownToken(linkScopes), theme);
+
+        // Create link styling
+        Color? foregroundColor = linkFg != -1 ? StyleHelper.GetColor(linkFg, theme) : Color.Blue;
+        Color? backgroundColor = linkBg != -1 ? StyleHelper.GetColor(linkBg, theme) : null;
+        var decoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline;
+
+        var linkStyle = new Style(foregroundColor, backgroundColor, decoration);
+
+        // Use link text if available, otherwise use URL
+        var linkText = ExtractInlineText(link);
+        if (string.IsNullOrEmpty(linkText))
         {
-            Color paraColor = pfg != -1 ? StyleHelper.GetColor(pfg, theme) : Color.Default;
-            Color paraBgColor = pbg != -1 ? StyleHelper.GetColor(pbg, theme) : Color.Default;
-            Decoration paraDecoration = StyleHelper.GetDecoration(pfs);
-
-            var paraStyle = new Style(paraColor, paraBgColor, paraDecoration);
-            var styledBuilder = new StringBuilder();
-            styledBuilder.AppendWithStyle(paraStyle, text);
-            return new Markup(styledBuilder.ToString());
+            linkText = link.Url ?? "";
         }
-        else
-        {
-            return new Markup(text);
-        }
+
+        paragraph.Append(linkText, linkStyle);
     }
 
     /// <summary>
-    /// Checks if a renderable is a compact image suitable for inline display.
+    /// Extracts plain text from inline elements without markup.
     /// </summary>
-    /// <param name="renderable">The renderable to check</param>
-    /// <returns>True if it's a compact image</returns>
-    private static bool IsCompactImage(IRenderable renderable)
+    private static string ExtractInlineText(Inline inline)
     {
-        // Simple heuristic: if it's a markup with an image emoji, treat it as compact
-        return renderable is Markup markup && markup.ToString()?.Contains("🖼️") == true;
+        var builder = new System.Text.StringBuilder();
+        ExtractInlineTextRecursive(inline, builder);
+        return builder.ToString();
     }
 
     /// <summary>
-    /// Checks if a paragraph contains only a single image (and possibly whitespace).
+    /// Recursively extracts text from inline elements.
     /// </summary>
-    /// <param name="paragraph">The paragraph to check</param>
-    /// <param name="imageLinks">The image links found in the paragraph</param>
-    /// <returns>True if the paragraph contains only a single image</returns>
-    private static bool IsImageOnlyParagraph(ParagraphBlock paragraph, List<LinkInline> imageLinks)
-    {
-        if (imageLinks.Count != 1)
-            return false;
-
-        if (paragraph.Inline is null)
-            return false;
-
-        // Get all non-whitespace inlines
-        var nonWhitespaceInlines = paragraph.Inline
-            .Where(inline => !(inline is LiteralInline literal && string.IsNullOrWhiteSpace(literal.Content.ToString())))
-            .ToList();
-
-        // Should have exactly one non-whitespace inline, which should be our image
-        return nonWhitespaceInlines.Count == 1 && nonWhitespaceInlines[0] == imageLinks[0];
-    }
-
-    /// <summary>
-    /// Processes a non-image inline element and adds it to the text builder.
-    /// </summary>
-    /// <param name="inline">The inline element to process</param>
-    /// <param name="theme">Theme for styling</param>
-    /// <param name="builder">StringBuilder to append to</param>
-    private static void ProcessNonImageInline(Markdig.Syntax.Inlines.Inline inline, Theme theme, StringBuilder builder)
+    private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder)
     {
         switch (inline)
         {
@@ -254,36 +167,21 @@ internal static class ParagraphRenderer
                 builder.Append(literal.Content.ToString());
                 break;
 
-            case LinkInline link when !link.IsImage:
-                // Process regular links
-                var linkBuilder = new StringBuilder();
-                InlineProcessor.ExtractInlineText(link, theme, linkBuilder);
-                builder.Append(linkBuilder);
-                break;
-
-            case EmphasisInline emph:
-                var emphBuilder = new StringBuilder();
-                InlineProcessor.ExtractInlineText(emph, theme, emphBuilder);
-                builder.Append(emphBuilder);
-                break;
-
-            case CodeInline code:
-                // Handle code inline directly since ExtractInlineText doesn't support CodeInline
-                builder.Append('`');
-                builder.Append(code.Content);
-                builder.Append('`');
-                break;
-
-            case LineBreakInline:
-                builder.Append('\n');
-                break;
-
-            default:
-                if (inline is ContainerInline childContainer)
+            case ContainerInline container:
+                foreach (var child in container)
                 {
-                    var childBuilder = new StringBuilder();
-                    InlineProcessor.ExtractInlineText(childContainer, theme, childBuilder);
-                    builder.Append(childBuilder);
+                    ExtractInlineTextRecursive(child, builder);
+                }
+                break;
+
+            case LeafInline leaf:
+                if (leaf is CodeInline code)
+                {
+                    builder.Append(code.Content);
+                }
+                else if (leaf is LineBreakInline)
+                {
+                    builder.Append('\n');
                 }
                 break;
         }

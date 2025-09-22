@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Optimizations;
@@ -8,8 +9,8 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Optimizations;
 /// </summary>
 internal static class SpanOptimizedMarkdownProcessor
 {
-    private static readonly char[] LineBreakChars = ['\r', '\n'];
-    private static readonly char[] WhitespaceChars = [' ', '\t', '\r', '\n'];
+    private static readonly SearchValues<char> LineBreakChars = SearchValues.Create(['\r', '\n']);
+    private static readonly SearchValues<char> WhitespaceChars = SearchValues.Create([' ', '\t', '\r', '\n']);
 
     /// <summary>
     /// Counts lines in markdown text using span operations for better performance.

@@ -105,7 +105,7 @@ internal static class MarkdownRenderer
                     {
                         url = line.SubstringAtIndexes(tokens[i].StartIndex, tokens[i].EndIndex);
                     }
-                    if (title != null && url != null)
+                    if (title is not null && url is not null)
                     {
                         builder.Append(MarkdownLinkFormatter.WriteMarkdownLink(url, title));
                         title = null;

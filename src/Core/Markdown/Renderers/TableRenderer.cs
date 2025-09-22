@@ -1,6 +1,6 @@
-using System.Text;
-using Markdig.Extensions.Tables;
+﻿using Markdig.Extensions.Tables;
 using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
@@ -8,142 +8,238 @@ using TextMateSharp.Themes;
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
 /// <summary>
-/// Renders markdown table blocks.
+/// Table renderer that builds Spectre.Console objects directly instead of markup strings.
+/// This eliminates VT escaping issues and provides proper color support.
 /// </summary>
 internal static class TableRenderer
 {
     /// <summary>
-    /// Renders a markdown table with proper headers and rows.
+    /// Renders a markdown table by building Spectre.Console Table objects directly.
+    /// This approach provides proper theme color support and eliminates VT escaping issues.
     /// </summary>
     /// <param name="table">The table block to render</param>
     /// <param name="theme">Theme for styling</param>
-    /// <returns>Rendered table or collection of tables</returns>
+    /// <returns>Rendered table with proper styling</returns>
     public static IRenderable? Render(Markdig.Extensions.Tables.Table table, Theme theme)
     {
-        var tables = new List<Spectre.Console.Table>();
-        Spectre.Console.Table? spectreTable = null;
-        List<string>? headerCells = null;
-        bool headerAdded = false;
+        var spectreTable = new Spectre.Console.Table();
 
-        List<(bool isHeader, List<string> cells)> allRows = ExtractTableData(table, theme);
-        int colCount = headerCells?.Count ?? 0;
+        // Configure table appearance
+        spectreTable.Border = TableBorder.Rounded;
+        spectreTable.BorderStyle = GetTableBorderStyle(theme);
 
-        foreach ((bool isHeader, List<string> cells) in allRows)
+        List<(bool isHeader, List<TableCellContent> cells)> allRows = ExtractTableDataOptimized(table, theme);
+
+        if (allRows.Count == 0)
+            return null;
+
+        // Add headers if present
+        var headerRow = allRows.FirstOrDefault(r => r.isHeader);
+        if (headerRow.cells?.Count > 0)
         {
-            if (isHeader)
+            foreach (var cell in headerRow.cells)
             {
-                (spectreTable, headerAdded) = ProcessHeaderRow(cells, tables, spectreTable, headerAdded, ref colCount);
-                headerCells ??= new List<string>(cells);
+                var headerStyle = GetHeaderStyle(theme);
+                spectreTable.AddColumn(new TableColumn(cell.Text).Header(new Text(cell.Text, headerStyle)));
             }
-            else
+        }
+        else
+        {
+            // No explicit headers, use first row as headers
+            var firstRow = allRows.FirstOrDefault();
+            if (firstRow.cells?.Count > 0)
             {
-                ProcessDataRow(cells, spectreTable, colCount);
+                foreach (var cell in firstRow.cells)
+                {
+                    spectreTable.AddColumn(new TableColumn(cell.Text));
+                }
+                allRows = allRows.Skip(1).ToList();
             }
         }
 
-        if (spectreTable is not null && headerAdded)
+        // Add data rows
+        foreach (var (isHeader, cells) in allRows.Where(r => !r.isHeader))
         {
-            tables.Add(spectreTable);
+            if (cells?.Count > 0)
+            {
+                var rowCells = new List<IRenderable>();
+                foreach (var cell in cells)
+                {
+                    var cellStyle = GetCellStyle(theme);
+                    rowCells.Add(new Text(cell.Text, cellStyle));
+                }
+                spectreTable.AddRow(rowCells.ToArray());
+            }
         }
 
-        return tables.Count switch
-        {
-            1 => tables[0],
-            > 1 => new Rows(tables.ToArray()),
-            _ => null
-        };
+        return spectreTable;
     }
 
     /// <summary>
-    /// Extracts all table data including headers and rows.
+    /// Represents the content and styling of a table cell.
     /// </summary>
-    private static List<(bool isHeader, List<string> cells)> ExtractTableData(Markdig.Extensions.Tables.Table table, Theme theme)
+    private sealed record TableCellContent(string Text, TableColumnAlign? Alignment);
+
+    /// <summary>
+    /// Extracts table data with optimized cell content processing.
+    /// </summary>
+    private static List<(bool isHeader, List<TableCellContent> cells)> ExtractTableDataOptimized(
+        Markdig.Extensions.Tables.Table table, Theme theme)
     {
-        var allRows = new List<(bool isHeader, List<string> cells)>();
+        var result = new List<(bool isHeader, List<TableCellContent> cells)>();
 
         foreach (Markdig.Extensions.Tables.TableRow row in table)
         {
-            var cells = new List<string>();
+            bool isHeader = row.IsHeader;
+            var cells = new List<TableCellContent>();
 
-            foreach (TableCell cell in row.Cast<TableCell>())
+            for (int i = 0; i < row.Count; i++)
             {
-                string cellText = ExtractCellText(cell, theme);
-                cells.Add(cellText);
+                if (row[i] is TableCell cell)
+                {
+                    var cellText = ExtractCellTextOptimized(cell, theme);
+                    var alignment = i < table.ColumnDefinitions.Count ? table.ColumnDefinitions[i].Alignment : null;
+                    cells.Add(new TableCellContent(cellText, alignment));
+                }
             }
 
-            allRows.Add((row.IsHeader, cells));
+            result.Add((isHeader, cells));
         }
 
-        return allRows;
+        return result;
     }
 
     /// <summary>
-    /// Extracts text content from a table cell.
+    /// Extracts text from table cells using optimized inline processing.
     /// </summary>
-    private static string ExtractCellText(TableCell cell, Theme theme)
+    private static string ExtractCellTextOptimized(TableCell cell, Theme theme)
     {
-        string cellText = string.Empty;
+        var textBuilder = new System.Text.StringBuilder();
 
-        foreach (Block cellBlock in cell)
+        foreach (Block block in cell)
         {
-            if (cellBlock is ParagraphBlock para)
+            if (block is ParagraphBlock paragraph && paragraph.Inline is not null)
             {
-                var cellBuilder = new StringBuilder();
-                InlineProcessor.ExtractInlineText(para.Inline, theme, cellBuilder);
-                cellText += cellBuilder.ToString();
+                ExtractInlineTextOptimized(paragraph.Inline, textBuilder);
             }
-            else
+            else if (block is Markdig.Syntax.CodeBlock code)
             {
-                cellText += cellBlock.ToString();
+                textBuilder.Append(code.Lines.ToString());
             }
         }
 
-        return cellText;
+        return textBuilder.ToString().Trim();
     }
 
     /// <summary>
-    /// Processes a header row in the table.
+    /// Extracts text from inline elements optimized for table cells.
     /// </summary>
-    private static (Spectre.Console.Table? table, bool headerAdded) ProcessHeaderRow(
-        List<string> cells,
-        List<Spectre.Console.Table> tables,
-        Spectre.Console.Table? currentTable,
-        bool headerAdded,
-        ref int colCount)
+    private static void ExtractInlineTextOptimized(ContainerInline inlines, System.Text.StringBuilder builder)
     {
-        if (currentTable is not null && headerAdded)
+        foreach (Inline inline in inlines)
         {
-            tables.Add(currentTable);
-            currentTable = null;
-            headerAdded = false;
+            switch (inline)
+            {
+                case LiteralInline literal:
+                    builder.Append(literal.Content.ToString());
+                    break;
+
+                case EmphasisInline emphasis:
+                    // For tables, we extract just the text content
+                    ExtractInlineTextRecursive(emphasis, builder);
+                    break;
+
+                case Markdig.Syntax.Inlines.CodeInline code:
+                    builder.Append(code.Content);
+                    break;
+
+                case Markdig.Syntax.Inlines.LinkInline link:
+                    ExtractInlineTextRecursive(link, builder);
+                    break;
+
+                default:
+                    ExtractInlineTextRecursive(inline, builder);
+                    break;
+            }
         }
-
-        currentTable ??= new Spectre.Console.Table();
-        colCount = cells.Count;
-
-        for (int i = 0; i < colCount; i++)
-        {
-            currentTable.AddColumn(Markup.Escape(cells[i]));
-        }
-
-        return (currentTable, true);
     }
 
     /// <summary>
-    /// Processes a data row in the table.
+    /// Recursively extracts text from inline elements.
     /// </summary>
-    private static void ProcessDataRow(List<string> cells, Spectre.Console.Table? spectreTable, int colCount)
+    private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder)
     {
-        if (spectreTable is null) return;
-
-        var rowCells = new List<IRenderable>();
-
-        for (int i = 0; i < colCount; i++)
+        switch (inline)
         {
-            string cellContent = i < cells.Count ? cells[i] : "";
-            rowCells.Add(new Markup(Markup.Escape(cellContent)));
+            case LiteralInline literal:
+                builder.Append(literal.Content.ToString());
+                break;
+
+            case ContainerInline container:
+                foreach (var child in container)
+                {
+                    ExtractInlineTextRecursive(child, builder);
+                }
+                break;
+
+            case Markdig.Syntax.Inlines.LeafInline leaf:
+                if (leaf is Markdig.Syntax.Inlines.CodeInline code)
+                {
+                    builder.Append(code.Content);
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Gets the border style for tables based on theme.
+    /// </summary>
+    private static Style GetTableBorderStyle(Theme theme)
+    {
+        // Get theme colors for table borders
+        var borderScopes = new[] { "punctuation.definition.table" };
+        var (borderFg, borderBg, borderFs) = TokenProcessor.ExtractThemeProperties(
+            new MarkdownToken(borderScopes), theme);
+
+        if (borderFg != -1)
+        {
+            return new Style(foreground: StyleHelper.GetColor(borderFg, theme));
         }
 
-        spectreTable.AddRow(rowCells);
+        return new Style(foreground: Color.Grey);
+    }
+
+    /// <summary>
+    /// Gets the header style for table headers.
+    /// </summary>
+    private static Style GetHeaderStyle(Theme theme)
+    {
+        // Get theme colors for table headers
+        var headerScopes = new[] { "markup.heading.table" };
+        var (headerFg, headerBg, headerFs) = TokenProcessor.ExtractThemeProperties(
+            new MarkdownToken(headerScopes), theme);
+
+        Color? foregroundColor = headerFg != -1 ? StyleHelper.GetColor(headerFg, theme) : Color.Yellow;
+        Color? backgroundColor = headerBg != -1 ? StyleHelper.GetColor(headerBg, theme) : null;
+        var decoration = StyleHelper.GetDecoration(headerFs) | Decoration.Bold;
+
+        return new Style(foregroundColor, backgroundColor, decoration);
+    }
+
+    /// <summary>
+    /// Gets the cell style for table data cells.
+    /// </summary>
+    private static Style GetCellStyle(Theme theme)
+    {
+        // Get theme colors for table cells
+        var cellScopes = new[] { "markup.table.cell" };
+        var (cellFg, cellBg, cellFs) = TokenProcessor.ExtractThemeProperties(
+            new MarkdownToken(cellScopes), theme);
+
+        Color? foregroundColor = cellFg != -1 ? StyleHelper.GetColor(cellFg, theme) : Color.White;
+        Color? backgroundColor = cellBg != -1 ? StyleHelper.GetColor(cellBg, theme) : null;
+        var decoration = StyleHelper.GetDecoration(cellFs);
+
+        return new Style(foregroundColor, backgroundColor, decoration);
     }
 }

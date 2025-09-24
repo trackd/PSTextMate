@@ -50,14 +50,21 @@ public static class TextMateProcessor
         try
         {
             (TextMateSharp.Registry.Registry registry, Theme theme) = CacheManager.GetCachedTheme(themeName);
-            IGrammar? grammar = CacheManager.GetCachedGrammar(registry, grammarId, isExtension);
-
+            var options = new TextMateSharp.Registry.RegistryOptions(themeName);
+            string initialScope = isExtension ? options.GetScopeByExtension(grammarId) : options.GetScopeByLanguageId(grammarId);
+            IGrammar? grammar = null;
+            try
+            {
+                grammar = registry.LoadGrammar(initialScope);
+            }
+            catch (TextMateSharp.TMException ex)
+            {
+                // Re-throw with a clearer message for our callers/tests
+                throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}", ex);
+            }
             if (grammar is null)
             {
-                string errorMessage = isExtension
-                    ? $"Grammar not found for file extension: {grammarId}"
-                    : $"Grammar not found for language: {grammarId}";
-                throw new InvalidOperationException(errorMessage);
+                throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}");
             }
 
             // Use optimized rendering based on grammar type
@@ -138,10 +145,83 @@ public static class TextMateProcessor
             ruleStack = result.RuleStack;
             TokenProcessor.ProcessTokensBatchNoEscape(result.Tokens, line, theme, builder, null, lineIndex);
             string lineMarkup = builder.ToString();
-            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
+            // Use Text (raw content) for code blocks so markup characters are preserved
+            // and not interpreted by the Markup parser.
+            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Text(lineMarkup));
             builder.Clear();
         }
 
         return new Rows(rows.ToArray());
+    }
+
+    /// <summary>
+    /// Processes an enumerable of lines in batches to support streaming/low-memory processing.
+    /// Yields a Rows result for each processed batch.
+    /// </summary>
+    public static IEnumerable<RenderableBatch> ProcessLinesInBatches(IEnumerable<string> lines, int batchSize, ThemeName themeName, string grammarId, bool isExtension = false)
+    {
+        ArgumentNullException.ThrowIfNull(lines, nameof(lines));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize, nameof(batchSize));
+
+        var buffer = new List<string>(batchSize);
+        int batchIndex = 0;
+        long fileOffset = 0; // starting line index for the next batch
+
+        // Load theme and registry once and then resolve the requested grammar scope
+        // directly on the registry. Avoid using the global grammar cache here because
+        // TextMateSharp's Registry manages its own internal grammar store and repeated
+        // LoadGrammar calls or cross-registry caching can cause duplicate-key exceptions.
+        (TextMateSharp.Registry.Registry registry, Theme theme) = CacheManager.GetCachedTheme(themeName);
+        var options = new TextMateSharp.Registry.RegistryOptions(themeName);
+        string initialScope = isExtension ? options.GetScopeByExtension(grammarId) : options.GetScopeByLanguageId(grammarId);
+        IGrammar? grammar = null;
+        try
+        {
+            grammar = registry.LoadGrammar(initialScope);
+        }
+        catch (TextMateSharp.TMException ex)
+        {
+            // Re-throw with a clearer message for our callers/tests
+            throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}", ex);
+        }
+        if (grammar is null)
+        {
+            throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}");
+        }
+
+        bool useMarkdownRenderer = grammar.GetName() == "Markdown";
+
+        foreach (string? line in lines)
+        {
+            buffer.Add(line ?? string.Empty);
+            if (buffer.Count >= batchSize)
+            {
+                // Render the batch using the already-loaded grammar and theme
+                Rows? result = useMarkdownRenderer
+                    ? MarkdownRenderer.Render([.. buffer], theme, grammar, themeName, null)
+                    : StandardRenderer.Render([.. buffer], theme, grammar, null);
+                if (result is not null)
+                    yield return new RenderableBatch(result.Renderables, batchIndex: batchIndex++, fileOffset: fileOffset);
+                buffer.Clear();
+                fileOffset += batchSize;
+            }
+        }
+        if (buffer.Count > 0)
+        {
+            Rows? result = useMarkdownRenderer
+                ? MarkdownRenderer.Render([.. buffer], theme, grammar, themeName, null)
+                : StandardRenderer.Render([.. buffer], theme, grammar, null);
+            if (result is not null)
+                yield return new RenderableBatch(result.Renderables, batchIndex: batchIndex++, fileOffset: fileOffset);
+        }
+    }
+
+    /// <summary>
+    /// Helper to stream a file by reading lines lazily and processing them in batches.
+    /// </summary>
+    public static IEnumerable<RenderableBatch> ProcessFileInBatches(string filePath, int batchSize, ThemeName themeName, string grammarId, bool isExtension = false)
+    {
+        if (!File.Exists(filePath)) throw new FileNotFoundException(filePath);
+        return ProcessLinesInBatches(File.ReadLines(filePath), batchSize, themeName, grammarId, isExtension);
     }
 }

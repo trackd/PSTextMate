@@ -2,9 +2,12 @@
 using Markdig.Extensions.AutoLinks;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using Markdig.Extensions;
+using Markdig.Extensions.TaskLists;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
+using System.Text;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -12,8 +15,11 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 /// Paragraph renderer that builds Spectre.Console objects directly instead of markup strings.
 /// This eliminates VT escaping issues and avoids double-parsing overhead.
 /// </summary>
-internal static class ParagraphRenderer
+internal static partial class ParagraphRenderer
 {
+    // reuse static arrays for common scope queries to avoid allocating new arrays per call
+    private static readonly string[] LinkScope = ["markup.underline.link"];
+
     /// <summary>
     /// Renders a paragraph block by building Spectre.Console Paragraph objects directly.
     /// This approach eliminates VT escaping issues and improves performance.
@@ -88,7 +94,7 @@ internal static class ParagraphRenderer
                     ProcessAutoLinkInline(paragraph, autoLink, theme);
                     break;
 
-                case Markdig.Extensions.TaskLists.TaskList taskList:
+                case TaskList taskList:
                     // TaskList items are handled at the list level, skip here
                     break;
 
@@ -217,24 +223,14 @@ internal static class ParagraphRenderer
             linkText = link.Url ?? "";
         }
 
-        // Get theme colors for links
-        string[] linkScopes = new[] { "markup.underline.link" };
-        (int linkFg, int linkBg, FontStyle linkFs) = TokenProcessor.ExtractThemeProperties(
-            new MarkdownToken(linkScopes), theme);
+        // Use cached style if available
+        Style? linkStyleBase = TokenProcessor.GetStyleForScopes(LinkScope, theme);
+        Color? foregroundColor = linkStyleBase?.Foreground ?? Color.Blue;
+        Color? backgroundColor = linkStyleBase?.Background ?? null;
+        Decoration baseDecoration = linkStyleBase is not null ? linkStyleBase.Decoration : Decoration.None;
+        Decoration linkDecoration = baseDecoration | Decoration.Underline | emphasisDecoration;
 
-        // Create link styling with emphasis decoration combined
-        Color? foregroundColor = linkFg != -1 ? StyleHelper.GetColor(linkFg, theme) : Color.Blue;
-        Color? backgroundColor = linkBg != -1 ? StyleHelper.GetColor(linkBg, theme) : null;
-        Decoration linkDecoration = StyleHelper.GetDecoration(linkFs) | Decoration.Underline | emphasisDecoration;
-
-        // Create style with link parameter for clickable links
-        var linkStyle = new Style(
-            foreground: foregroundColor,
-            background: backgroundColor,
-            decoration: linkDecoration,
-            link: link.Url // This makes it clickable!
-        );
-
+        var linkStyle = new Style(foregroundColor, backgroundColor, linkDecoration, link.Url);
         paragraph.Append(linkText, linkStyle);
     }
 
@@ -244,7 +240,7 @@ internal static class ParagraphRenderer
     private static void ProcessCodeInline(Paragraph paragraph, CodeInline code, Theme theme)
     {
         // Get theme colors for inline code
-        string[] codeScopes = new[] { "markup.inline.raw" };
+        string[] codeScopes = ["markup.inline.raw"];
         (int codeFg, int codeBg, FontStyle codeFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(codeScopes), theme);
 
@@ -303,7 +299,7 @@ internal static class ParagraphRenderer
         }
 
         // Get theme colors for links
-        string[] linkScopes = new[] { "markup.underline.link" };
+        string[] linkScopes = ["markup.underline.link"];
         (int linkFg, int linkBg, FontStyle linkFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(linkScopes), theme);
 
@@ -345,7 +341,7 @@ internal static class ParagraphRenderer
         var segmentList = new List<TextSegment>();
 
         // Simple regex to find @username patterns
-        var usernamePattern = new System.Text.RegularExpressions.Regex(@"@[a-zA-Z0-9_-]+");
+        var usernamePattern = RegNumLet();
         MatchCollection matches = usernamePattern.Matches(text);
 
         if (matches.Count == 0)
@@ -378,7 +374,7 @@ internal static class ParagraphRenderer
         return true;
     }
 
-    private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder)
+    private static void ExtractInlineTextRecursive(Inline inline, StringBuilder builder)
     {
         switch (inline)
         {
@@ -405,4 +401,7 @@ internal static class ParagraphRenderer
                 break;
         }
     }
+
+    [GeneratedRegex(@"@[a-zA-Z0-9_-]+")]
+    private static partial Regex RegNumLet();
 }

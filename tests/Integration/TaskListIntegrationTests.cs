@@ -1,4 +1,5 @@
 ﻿using PwshSpectreConsole.TextMate.Core;
+using System.Threading;
 using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate.Tests.Integration;
@@ -94,10 +95,50 @@ public class TaskListIntegrationTests
         result.Renderables.Should().HaveCountGreaterThan(3);
     }
 
+    [Fact]
+    public void StreamingProcessFileInBatches_ProducesMultipleBatchesWithOffsets()
+    {
+        // Arrange - create a temporary file with multiple lines that cross batch boundaries
+        string[] lines = Enumerable.Range(0, 2500).Select(i => i % 5 == 0 ? "// comment line" : "var x = 1; // code").ToArray();
+        string temp = Path.GetTempFileName();
+        File.WriteAllLines(temp, lines);
+
+        try
+        {
+            // Act
+            var batches = TextMate.Core.TextMateProcessor.ProcessFileInBatches(temp, 1000, ThemeName.DarkPlus, ".cs", isExtension: true).ToList();
+
+            // Assert
+            batches.Should().NotBeEmpty();
+            batches.Count.Should().BeGreaterThan(1);
+            // Offsets should increase and cover the whole file
+            long covered = batches.Sum(b => b.LineCount);
+            covered.Should().BeGreaterOrEqualTo(lines.Length);
+            // Batch indexes should be unique and sequential
+            batches.Select(b => b.BatchIndex).Should().BeInAscendingOrder();
+        }
+        finally
+        {
+            // Retry deletion a few times to avoid transient sharing violations on Windows
+            const int maxAttempts = 5;
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(temp)) File.Delete(temp);
+                    break;
+                }
+                catch (IOException)
+                {
+                    Thread.Sleep(100);
+                }
+            }
+        }
+    }
+
     private static TextMateSharp.Themes.Theme CreateTestTheme()
     {
-        var registryOptions = new TextMateSharp.Registry.RegistryOptions(ThemeName.DarkPlus);
-        var registry = new TextMateSharp.Registry.Registry(registryOptions);
-        return registry.GetTheme();
+        var (_, theme) = TextMate.Infrastructure.CacheManager.GetCachedTheme(ThemeName.DarkPlus);
+        return theme;
     }
 }

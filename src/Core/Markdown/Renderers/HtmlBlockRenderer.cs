@@ -28,7 +28,8 @@ internal static class HtmlBlockRenderer
             Rows? htmlRows = TextMateProcessor.ProcessLinesCodeBlock([.. htmlLines], themeName, "html", false);
             if (htmlRows is not null)
             {
-                return new Panel(htmlRows)
+                var spectreRows = new Spectre.Console.Rows(htmlRows.Renderables);
+                return new Panel(spectreRows)
                     .Border(BoxBorder.Rounded)
                     .Header("html", Justify.Left);
             }

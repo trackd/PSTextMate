@@ -14,7 +14,7 @@ public class MarkdownRendererTests
         var themeName = ThemeName.DarkPlus;
 
         // Act
-        var result = MarkdownRenderer.Render(markdown, theme, themeName);
+        var result = PwshSpectreConsole.TextMate.Core.Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
 
         // Assert
         result.Should().NotBeNull();
@@ -30,7 +30,7 @@ public class MarkdownRendererTests
         var themeName = ThemeName.DarkPlus;
 
         // Act
-        var result = MarkdownRenderer.Render(markdown, theme, themeName);
+        var result = PwshSpectreConsole.TextMate.Core.Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
 
         // Assert
         result.Should().NotBeNull();
@@ -46,7 +46,7 @@ public class MarkdownRendererTests
         var themeName = ThemeName.DarkPlus;
 
         // Act
-        var result = MarkdownRenderer.Render(markdown, theme, themeName);
+        var result = PwshSpectreConsole.TextMate.Core.Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
 
         // Assert
         result.Should().NotBeNull();
@@ -65,7 +65,7 @@ public class MarkdownRendererTests
         var themeName = ThemeName.DarkPlus;
 
         // Act
-        var result = MarkdownRenderer.Render(markdownHeading, theme, themeName);
+        var result = PwshSpectreConsole.TextMate.Core.Markdown.MarkdownRenderer.Render(markdownHeading, theme, themeName);
 
         // Assert
         result.Should().NotBeNull();
@@ -74,9 +74,8 @@ public class MarkdownRendererTests
 
     private static Theme CreateTestTheme()
     {
-        // Create a minimal theme for testing
-        var registryOptions = new RegistryOptions(ThemeName.DarkPlus);
-        var registry = new Registry(registryOptions);
-        return registry.GetTheme();
+        // Use the internal CacheManager to get a cached Theme instance for tests
+        var (registry, theme) = PwshSpectreConsole.TextMate.Infrastructure.CacheManager.GetCachedTheme(ThemeName.DarkPlus);
+        return theme;
     }
 }

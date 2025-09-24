@@ -3,6 +3,7 @@ using TextMateSharp.Grammars;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
 using PwshSpectreConsole.TextMate;
+using PwshSpectreConsole.TextMate.Core;
 
 namespace PwshSpectreConsole.TextMate.Cmdlets;
 
@@ -12,7 +13,7 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
 [Alias("st","Show-Code")]
-[OutputType(typeof(Rows))]
+[OutputType(typeof(RenderableBatch))]
 public sealed class ShowTextMateCmdlet : PSCmdlet
 {
     private static readonly string[] NewLineSplit = ["\r\n", "\n", "\r"];
@@ -53,6 +54,14 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     [Parameter]
     public SwitchParameter PassThru { get; set; }
 
+    [Parameter(
+        ParameterSetName = "Path"
+    )]
+    public SwitchParameter Stream { get; set; }
+
+    [Parameter(ParameterSetName = "Path")]
+    public int BatchSize { get; set; } = 1000;
+
     protected override void ProcessRecord()
     {
         if (ParameterSetName == "String" && InputObject is not null)
@@ -85,7 +94,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         {
             try
             {
-                Rows? result = ProcessPathInput();
+                Spectre.Console.Rows? result = ProcessPathInput();
                 if (result is not null)
                 {
                     WriteObject(result);
@@ -113,7 +122,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
 
         try
         {
-            Rows? result = ProcessStringInput();
+            Spectre.Console.Rows? result = ProcessStringInput();
             if (result is not null)
             {
                 WriteObject(result);
@@ -129,7 +138,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         }
     }
 
-    private Rows? ProcessStringInput()
+    private Spectre.Console.Rows? ProcessStringInput()
     {
         if (_inputObjectBuffer.Count == 0)
         {
@@ -166,7 +175,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         return Converter.ProcessLines(strings, Theme, "powershell", isExtension: false);
     }
 
-    private Rows? ProcessPathInput()
+    private Spectre.Console.Rows? ProcessPathInput()
     {
         FileInfo filePath = new(GetUnresolvedProviderPathFromPSPath(Path));
 
@@ -178,6 +187,33 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         // Decide how to interpret based on precedence:
         // 1) Language token (can be a language id OR an extension)
         // 2) File extension
+        if (Stream.IsPresent)
+        {
+            // Stream file in batches
+            int batchIndex = 0;
+            if (!string.IsNullOrWhiteSpace(Language))
+            {
+                (string? token, bool asExtension) = TextMateResolver.ResolveToken(Language!);
+                WriteVerbose($"Streaming file: {filePath.FullName} with explicit token: {Language} (as {(asExtension ? "extension" : "language")}) in batches of {BatchSize}");
+                foreach (RenderableBatch batch in TextMateProcessor.ProcessFileInBatches(filePath.FullName, BatchSize, Theme, token, asExtension))
+                {
+                    // Attach a stable batch index so consumers can track ordering
+                    var indexed = new RenderableBatch(batch.Renderables, batchIndex: batchIndex++, fileOffset: batch.FileOffset);
+                    WriteObject(indexed);
+                }
+                return null;
+            }
+
+            string extension = filePath.Extension;
+            WriteVerbose($"Streaming file: {filePath.FullName} using file extension: {extension} in batches of {BatchSize}");
+            foreach (RenderableBatch batch in TextMateProcessor.ProcessFileInBatches(filePath.FullName, BatchSize, Theme, extension, true))
+            {
+                var indexed = new RenderableBatch(batch.Renderables, batchIndex: batchIndex++, fileOffset: batch.FileOffset);
+                WriteObject(indexed);
+            }
+            return null;
+        }
+
         string[] lines = File.ReadAllLines(filePath.FullName);
         if (!string.IsNullOrWhiteSpace(Language))
         {
@@ -185,8 +221,8 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
             WriteVerbose($"Processing file: {filePath.FullName} with explicit token: {Language} (as {(asExtension ? "extension" : "language")})");
             return Converter.ProcessLines(lines, Theme, token, isExtension: asExtension);
         }
-        string extension = filePath.Extension;
-        WriteVerbose($"Processing file: {filePath.FullName} using file extension: {extension}");
-        return Converter.ProcessLines(lines, Theme, extension, isExtension: true);
+        string extension2 = filePath.Extension;
+        WriteVerbose($"Processing file: {filePath.FullName} using file extension: {extension2}");
+        return Converter.ProcessLines(lines, Theme, extension2, isExtension: true);
     }
 }

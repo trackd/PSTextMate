@@ -38,7 +38,9 @@ internal static class CodeBlockRenderer
                 Rows? rows = TextMateProcessor.ProcessLinesCodeBlock(codeLines, themeName, language, false);
                 if (rows is not null)
                 {
-                    return new Panel(rows)
+                    // Convert internal Rows into Spectre.Console.Rows for Panel consumption
+                    var spectreRows = new Spectre.Console.Rows(rows.Renderables);
+                    return new Panel(spectreRows)
                         .Border(BoxBorder.Rounded)
                         .Header(language, Justify.Left);
                 }

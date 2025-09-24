@@ -122,10 +122,12 @@ internal static class MarkdownRenderer
             if (startIndex >= endIndex) continue;
 
             ReadOnlySpan<char> textSpan = line.SubstringAsSpan(startIndex, endIndex);
-            (int foreground, int background, FontStyle fontStyle) = TokenProcessor.ExtractThemeProperties(token, theme);
-            (string escapedText, Style? style) = TokenProcessor.WriteTokenOptimized(textSpan, foreground, background, fontStyle, theme);
 
-            builder.AppendWithStyle(style, escapedText);
+            // Use the cached Style where possible to avoid rebuilding Style objects per token
+            Style? style = TokenProcessor.GetStyleForScopes(token.Scopes, theme);
+
+            // Append escaped/unstyled text directly to the provided StringBuilder
+            TokenProcessor.WriteTokenOptimized(builder, textSpan, style, theme, escapeMarkup: true);
         }
     }
 }

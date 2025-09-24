@@ -1,9 +1,12 @@
 ﻿using Markdig.Extensions.Tables;
+using Markdig.Helpers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
+using System.Text;
+using PwshSpectreConsole.TextMate.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -60,12 +63,12 @@ internal static class TableRenderer
         else
         {
             // No explicit headers, use first row as headers
-            (bool isHeader, List<TableCellContent> cells) firstRow = allRows.FirstOrDefault();
-            if (firstRow.cells?.Count > 0)
+            (bool isHeader, List<TableCellContent> cells) = allRows.FirstOrDefault();
+            if (cells?.Count > 0)
             {
-                for (int i = 0; i < firstRow.cells.Count; i++)
+                for (int i = 0; i < cells.Count; i++)
                 {
-                    TableCellContent cell = firstRow.cells[i];
+                    TableCellContent cell = cells[i];
                     var column = new TableColumn(cell.Text);
                     if (i < table.ColumnDefinitions.Count)
                     {
@@ -79,7 +82,7 @@ internal static class TableRenderer
                     }
                     spectreTable.AddColumn(column);
                 }
-                allRows = allRows.Skip(1).ToList();
+                allRows = [.. allRows.Skip(1)];
             }
         }
 
@@ -104,12 +107,12 @@ internal static class TableRenderer
     /// <summary>
     /// Represents the content and styling of a table cell.
     /// </summary>
-    private sealed record TableCellContent(string Text, TableColumnAlign? Alignment);
+    internal sealed record TableCellContent(string Text, TableColumnAlign? Alignment);
 
     /// <summary>
     /// Extracts table data with optimized cell content processing.
     /// </summary>
-    private static List<(bool isHeader, List<TableCellContent> cells)> ExtractTableDataOptimized(
+    internal static List<(bool isHeader, List<TableCellContent> cells)> ExtractTableDataOptimized(
         Markdig.Extensions.Tables.Table table, Theme theme)
     {
         var result = new List<(bool isHeader, List<TableCellContent> cells)>();
@@ -140,7 +143,7 @@ internal static class TableRenderer
     /// </summary>
     private static string ExtractCellTextOptimized(TableCell cell, Theme theme)
     {
-        var textBuilder = new System.Text.StringBuilder();
+        var textBuilder = StringBuilderPool.Rent();
 
         foreach (Block block in cell)
         {
@@ -154,32 +157,39 @@ internal static class TableRenderer
             }
         }
 
-        return textBuilder.ToString().Trim();
+        string result = textBuilder.ToString().Trim();
+        TextMate.Helpers.StringBuilderPool.Return(textBuilder);
+        return result;
     }
 
     /// <summary>
     /// Extracts text from inline elements optimized for table cells.
     /// </summary>
-    private static void ExtractInlineTextOptimized(ContainerInline inlines, System.Text.StringBuilder builder)
+    private static void ExtractInlineTextOptimized(ContainerInline inlines, StringBuilder builder)
     {
+        // Small optimization: use a borrowed buffer for frequently accessed literal content instead of repeated ToString allocations.
         foreach (Inline inline in inlines)
         {
             switch (inline)
             {
                 case LiteralInline literal:
-                    builder.Append(literal.Content.ToString());
+                    // Append span directly from the underlying string to avoid creating intermediate allocations
+                    StringSlice slice = literal.Content;
+                    if (slice.Text is not null && slice.Length > 0)
+                    {
+                        builder.Append(slice.Text.AsSpan(slice.Start, slice.Length));
+                    }
                     break;
 
                 case EmphasisInline emphasis:
-                    // For tables, we extract just the text content
                     ExtractInlineTextRecursive(emphasis, builder);
                     break;
 
-                case Markdig.Syntax.Inlines.CodeInline code:
+                case CodeInline code:
                     builder.Append(code.Content);
                     break;
 
-                case Markdig.Syntax.Inlines.LinkInline link:
+                case LinkInline link:
                     ExtractInlineTextRecursive(link, builder);
                     break;
 
@@ -193,12 +203,15 @@ internal static class TableRenderer
     /// <summary>
     /// Recursively extracts text from inline elements.
     /// </summary>
-    private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder)
+    private static void ExtractInlineTextRecursive(Inline inline, StringBuilder builder)
     {
         switch (inline)
         {
             case LiteralInline literal:
-                builder.Append(literal.Content.ToString());
+                if (literal.Content.Text is not null && literal.Content.Length > 0)
+                {
+                    builder.Append(literal.Content.Text.AsSpan(literal.Content.Start, literal.Content.Length));
+                }
                 break;
 
             case ContainerInline container:
@@ -208,8 +221,8 @@ internal static class TableRenderer
                 }
                 break;
 
-            case Markdig.Syntax.Inlines.LeafInline leaf:
-                if (leaf is Markdig.Syntax.Inlines.CodeInline code)
+            case LeafInline leaf:
+                if (leaf is CodeInline code)
                 {
                     builder.Append(code.Content);
                 }
@@ -222,16 +235,12 @@ internal static class TableRenderer
     /// </summary>
     private static Style GetTableBorderStyle(Theme theme)
     {
-        // Get theme colors for table borders
-        string[] borderScopes = new[] { "punctuation.definition.table" };
-        (int borderFg, int borderBg, FontStyle borderFs) = TokenProcessor.ExtractThemeProperties(
-            new MarkdownToken(borderScopes), theme);
-
-        if (borderFg != -1)
+        string[] borderScopes = ["punctuation.definition.table"];
+        Style? style = TokenProcessor.GetStyleForScopes(borderScopes, theme);
+        if (style is not null)
         {
-            return new Style(foreground: StyleHelper.GetColor(borderFg, theme));
+            return style;
         }
-
         return new Style(foreground: Color.Grey);
     }
 
@@ -240,16 +249,12 @@ internal static class TableRenderer
     /// </summary>
     private static Style GetHeaderStyle(Theme theme)
     {
-        // Get theme colors for table headers
-        string[] headerScopes = new[] { "markup.heading.table" };
-        (int headerFg, int headerBg, FontStyle headerFs) = TokenProcessor.ExtractThemeProperties(
-            new MarkdownToken(headerScopes), theme);
-
-        Color? foregroundColor = headerFg != -1 ? StyleHelper.GetColor(headerFg, theme) : Color.Yellow;
-        Color? backgroundColor = headerBg != -1 ? StyleHelper.GetColor(headerBg, theme) : null;
-        Decoration decoration = StyleHelper.GetDecoration(headerFs) | Decoration.Bold;
-
-        return new Style(foregroundColor, backgroundColor, decoration);
+        string[] headerScopes = ["markup.heading.table"];
+        Style? baseStyle = TokenProcessor.GetStyleForScopes(headerScopes, theme);
+        Color fgColor = baseStyle?.Foreground ?? Color.Yellow;
+        Color? bgColor = baseStyle?.Background;
+        Decoration decoration = (baseStyle is not null ? baseStyle.Decoration : Decoration.None) | Decoration.Bold;
+        return new Style(fgColor, bgColor, decoration);
     }
 
     /// <summary>
@@ -257,15 +262,11 @@ internal static class TableRenderer
     /// </summary>
     private static Style GetCellStyle(Theme theme)
     {
-        // Get theme colors for table cells
-        string[] cellScopes = new[] { "markup.table.cell" };
-        (int cellFg, int cellBg, FontStyle cellFs) = TokenProcessor.ExtractThemeProperties(
-            new MarkdownToken(cellScopes), theme);
-
-        Color? foregroundColor = cellFg != -1 ? StyleHelper.GetColor(cellFg, theme) : Color.White;
-        Color? backgroundColor = cellBg != -1 ? StyleHelper.GetColor(cellBg, theme) : null;
-        Decoration decoration = StyleHelper.GetDecoration(cellFs);
-
-        return new Style(foregroundColor, backgroundColor, decoration);
+        string[] cellScopes = ["markup.table.cell"];
+        Style? baseStyle = TokenProcessor.GetStyleForScopes(cellScopes, theme);
+        Color fgColor = baseStyle?.Foreground ?? Color.White;
+        Color? bgColor = baseStyle?.Background;
+        Decoration decoration = baseStyle?.Decoration ?? Decoration.None;
+        return new Style(fgColor, bgColor, decoration);
     }
 }

@@ -50,18 +50,8 @@ public static class TextMateProcessor
         try
         {
             (TextMateSharp.Registry.Registry registry, Theme theme) = CacheManager.GetCachedTheme(themeName);
-            var options = new TextMateSharp.Registry.RegistryOptions(themeName);
-            string initialScope = isExtension ? options.GetScopeByExtension(grammarId) : options.GetScopeByLanguageId(grammarId);
-            IGrammar? grammar = null;
-            try
-            {
-                grammar = registry.LoadGrammar(initialScope);
-            }
-            catch (TextMateSharp.TMException ex)
-            {
-                // Re-throw with a clearer message for our callers/tests
-                throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}", ex);
-            }
+            // Resolve grammar using CacheManager which knows how to map language ids and extensions
+            IGrammar? grammar = CacheManager.GetCachedGrammar(registry, grammarId, isExtension);
             if (grammar is null)
             {
                 throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}");
@@ -172,18 +162,8 @@ public static class TextMateProcessor
         // TextMateSharp's Registry manages its own internal grammar store and repeated
         // LoadGrammar calls or cross-registry caching can cause duplicate-key exceptions.
         (TextMateSharp.Registry.Registry registry, Theme theme) = CacheManager.GetCachedTheme(themeName);
-        var options = new TextMateSharp.Registry.RegistryOptions(themeName);
-        string initialScope = isExtension ? options.GetScopeByExtension(grammarId) : options.GetScopeByLanguageId(grammarId);
-        IGrammar? grammar = null;
-        try
-        {
-            grammar = registry.LoadGrammar(initialScope);
-        }
-        catch (TextMateSharp.TMException ex)
-        {
-            // Re-throw with a clearer message for our callers/tests
-            throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}", ex);
-        }
+        // Resolve grammar using CacheManager which knows how to map language ids and extensions
+        IGrammar? grammar = CacheManager.GetCachedGrammar(registry, grammarId, isExtension);
         if (grammar is null)
         {
             throw new InvalidOperationException(isExtension ? $"Grammar not found for file extension: {grammarId}" : $"Grammar not found for language: {grammarId}");

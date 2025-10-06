@@ -6,8 +6,10 @@ namespace PwshSpectreConsole.TextMate;
 
 public static class Converter
 {
-    public static Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false)
+    public static Spectre.Console.Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false)
     {
-        return TextMateProcessor.ProcessLines(lines, themeName, grammarId, isExtension);
+        var rows = TextMateProcessor.ProcessLines(lines, themeName, grammarId, isExtension);
+        if (rows is null) return null;
+        return new Spectre.Console.Rows(rows.Renderables);
     }
 }

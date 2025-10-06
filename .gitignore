@@ -7,3 +7,6 @@ debug.md
 output/*
 */obj/*
 */bin/*
+.github/chatmodes/*
+.github/instructions/*
+.github/prompts/*

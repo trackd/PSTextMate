@@ -8,7 +8,7 @@ The markdown rendering functionality has been split into focused, single-respons
 
 ## Folder Structure
 
-```
+```note
 src/Core/Markdown/
 ├── MarkdownRenderer.cs           # Main orchestrator
 ├── InlineProcessor.cs            # Inline element processing
@@ -27,14 +27,16 @@ src/Core/Markdown/
 ## Component Responsibilities
 
 ### MarkdownRenderer
+
 - **Purpose**: Main entry point for markdown rendering
-- **Responsibilities**: 
+- **Responsibilities**:
   - Creates Markdig pipeline with extensions
   - Parses markdown document
   - Orchestrates block rendering
   - Manages spacing between elements
 
 ### InlineProcessor
+
 - **Purpose**: Handles all inline markdown elements
 - **Responsibilities**:
   - Processes inline text extraction
@@ -44,6 +46,7 @@ src/Core/Markdown/
   - Applies theme-based styling
 
 ### BlockRenderer
+
 - **Purpose**: Dispatches block elements to specific renderers
 - **Responsibilities**:
   - Pattern matches block types
@@ -66,27 +69,32 @@ Each renderer handles a specific block type with focused responsibilities:
 ## Key Features
 
 ### Task List Support
+
 - Detects `[x]`, `[X]`, and `[ ]` checkbox syntax
 - Renders with Unicode checkbox characters (☑️, ☐)
 - Automatically strips checkbox markup from displayed text
 
 ### Theme Integration
+
 - Full TextMate theme support across all elements
 - Consistent color and styling application
 - Fallback styling for unsupported elements
 
 ### Performance Optimizations
+
 - StringBuilder usage for efficient text building
 - Batch processing where possible
 - Minimal object allocation
 - Escape markup handling optimized per context
 
 ### Image Handling
+
 - Special image link rendering with emoji indicators
 - Styled image descriptions
 - URL display for accessibility
 
 ### Code Highlighting
+
 - TextMateProcessor integration for syntax highlighting
 - Language-specific panels with headers
 - Fallback rendering for unsupported languages
@@ -95,9 +103,11 @@ Each renderer handles a specific block type with focused responsibilities:
 ## Migration Notes
 
 ### Backward Compatibility
+
 The original `MarkdigSpectreMarkdownRenderer` class remains as a legacy wrapper that delegates to the new implementation, ensuring existing code continues to work without changes.  
 
 ### Usage
+
 ```csharp
 // New way (recommended)
 var result = MarkdownRenderer.Render(markdown, theme, themeName);
@@ -118,6 +128,7 @@ var result = MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
 ## Future Enhancements
 
 The modular architecture makes it easy to add:
+
 - Custom block renderers
 - Additional inline element processors
 - Enhanced theme customization

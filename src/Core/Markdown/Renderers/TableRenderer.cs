@@ -158,7 +158,7 @@ internal static class TableRenderer
         }
 
         string result = textBuilder.ToString().Trim();
-        TextMate.Helpers.StringBuilderPool.Return(textBuilder);
+        StringBuilderPool.Return(textBuilder);
         return result;
     }
 

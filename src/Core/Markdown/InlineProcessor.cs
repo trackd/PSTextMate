@@ -1,6 +1,6 @@
 using System.Text;
 using Markdig.Syntax.Inlines;
-using PwshSpectreConsole.TextMate.Core.Helpers;
+using PwshSpectreConsole.TextMate.Helpers;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
 using TextMateSharp.Themes;

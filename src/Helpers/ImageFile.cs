@@ -8,7 +8,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace PwshSpectreConsole.TextMate.Core.Helpers;
+namespace PwshSpectreConsole.TextMate.Helpers;
 
 /// <summary>
 /// Normalizes various image sources (file paths, URLs, base64) into file paths that can be used by Spectre.Console.SixelImage.

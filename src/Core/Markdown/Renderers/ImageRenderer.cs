@@ -1,5 +1,5 @@
 using System.Reflection;
-using PwshSpectreConsole.TextMate.Core.Helpers;
+using PwshSpectreConsole.TextMate.Helpers;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 

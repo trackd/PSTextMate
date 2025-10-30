@@ -1,6 +1,7 @@
 using System.Text;
 using PwshSpectreConsole.TextMate.Infrastructure;
 using PwshSpectreConsole.TextMate.Extensions;
+using PwshSpectreConsole.TextMate.Helpers;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
@@ -23,9 +24,8 @@ public static class TextMateProcessor
     /// <param name="grammarId">Language ID or file extension for grammar selection</param>
     /// <param name="isExtension">True if grammarId is a file extension, false if it's a language ID</param>
     /// <returns>Rendered rows with syntax highlighting, or null if processing fails</returns>
-    /// <exception cref="ArgumentNullException">Thrown when lines array is null</exception>
-    /// <exception cref="UnsupportedGrammarException">Thrown when grammar cannot be found</exception>
-    /// <exception cref="TextMateProcessingException">Thrown when processing encounters an error</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="lines"/> is null</exception>
+    /// <exception cref="InvalidOperationException">Thrown when grammar cannot be found or processing encounters an error</exception>
     public static Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false)
     {
         ArgumentNullException.ThrowIfNull(lines, nameof(lines));
@@ -85,6 +85,8 @@ public static class TextMateProcessor
     /// <param name="grammarId">Language ID or file extension for grammar selection</param>
     /// <param name="isExtension">True if grammarId is a file extension, false if it's a language ID</param>
     /// <returns>Rendered rows with syntax highlighting, or null if processing fails</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="lines"/> is null</exception>
+    /// <exception cref="InvalidOperationException">Thrown when grammar cannot be found or processing encounters an error</exception>
     public static Rows? ProcessLinesCodeBlock(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false)
     {
         ArgumentNullException.ThrowIfNull(lines, nameof(lines));
@@ -124,31 +126,63 @@ public static class TextMateProcessor
     /// </summary>
     private static Rows RenderCodeBlock(string[] lines, Theme theme, IGrammar grammar)
     {
-        var builder = new StringBuilder();
-        List<IRenderable> rows = new(lines.Length);
-        IStateStack? ruleStack = null;
-
-        for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+        var builder = StringBuilderPool.Rent();
+        try
         {
-            string line = lines[lineIndex];
-            ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
-            ruleStack = result.RuleStack;
-            TokenProcessor.ProcessTokensBatchNoEscape(result.Tokens, line, theme, builder, null, lineIndex);
-            string lineMarkup = builder.ToString();
-            // Use Text (raw content) for code blocks so markup characters are preserved
-            // and not interpreted by the Markup parser.
-            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Text(lineMarkup));
-            builder.Clear();
-        }
+            List<IRenderable> rows = new(lines.Length);
+            IStateStack? ruleStack = null;
 
-        return new Rows(rows.ToArray());
+            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            {
+                string line = lines[lineIndex];
+                ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
+                ruleStack = result.RuleStack;
+                TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback: null, lineIndex, escapeMarkup: false);
+                string lineMarkup = builder.ToString();
+                // Use Text (raw content) for code blocks so markup characters are preserved
+                // and not interpreted by the Markup parser.
+                rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Text(lineMarkup));
+                builder.Clear();
+            }
+
+            return new Rows(rows.ToArray());
+        }
+        finally
+        {
+            StringBuilderPool.Return(builder);
+        }
     }
 
     /// <summary>
     /// Processes an enumerable of lines in batches to support streaming/low-memory processing.
     /// Yields a Rows result for each processed batch.
     /// </summary>
-    public static IEnumerable<RenderableBatch> ProcessLinesInBatches(IEnumerable<string> lines, int batchSize, ThemeName themeName, string grammarId, bool isExtension = false)
+    /// <param name="lines">Enumerable of text lines to process</param>
+    /// <param name="batchSize">Number of lines to process per batch (default: 1000 lines balances memory usage with throughput)</param>
+    /// <param name="themeName">Theme to apply for styling</param>
+    /// <param name="grammarId">Language ID or file extension for grammar selection</param>
+    /// <param name="isExtension">True if grammarId is a file extension, false if it's a language ID</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <param name="progress">Optional progress reporter for tracking processing status</param>
+    /// <returns>Enumerable of RenderableBatch objects containing processed lines</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="lines"/> is null</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="batchSize"/> is less than or equal to zero</exception>
+    /// <exception cref="InvalidOperationException">Thrown when grammar cannot be found</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancellation is requested</exception>
+    /// <remarks>
+    /// Batch size considerations:
+    /// - Smaller batches (100-500): Lower memory, more frequent progress updates, slightly higher overhead
+    /// - Default (1000): Balanced approach for most scenarios
+    /// - Larger batches (2000-5000): Better throughput for large files, higher memory usage
+    /// </remarks>
+    public static IEnumerable<RenderableBatch> ProcessLinesInBatches(
+        IEnumerable<string> lines,
+        int batchSize,
+        ThemeName themeName,
+        string grammarId,
+        bool isExtension = false,
+        CancellationToken cancellationToken = default,
+        IProgress<(int batchIndex, long linesProcessed)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(lines, nameof(lines));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize, nameof(batchSize));
@@ -173,6 +207,8 @@ public static class TextMateProcessor
 
         foreach (string? line in lines)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             buffer.Add(line ?? string.Empty);
             if (buffer.Count >= batchSize)
             {
@@ -181,27 +217,74 @@ public static class TextMateProcessor
                     ? MarkdownRenderer.Render([.. buffer], theme, grammar, themeName, null)
                     : StandardRenderer.Render([.. buffer], theme, grammar, null);
                 if (result is not null)
-                    yield return new RenderableBatch(result.Renderables, batchIndex: batchIndex++, fileOffset: fileOffset);
+                {
+                    yield return new RenderableBatch(result.Renderables, batchIndex: batchIndex, fileOffset: fileOffset);
+                    progress?.Report((batchIndex, fileOffset + batchSize));
+                    batchIndex++;
+                }
                 buffer.Clear();
                 fileOffset += batchSize;
             }
         }
+
+        // Process remaining lines
         if (buffer.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             Rows? result = useMarkdownRenderer
                 ? MarkdownRenderer.Render([.. buffer], theme, grammar, themeName, null)
                 : StandardRenderer.Render([.. buffer], theme, grammar, null);
             if (result is not null)
-                yield return new RenderableBatch(result.Renderables, batchIndex: batchIndex++, fileOffset: fileOffset);
+            {
+                yield return new RenderableBatch(result.Renderables, batchIndex: batchIndex, fileOffset: fileOffset);
+                progress?.Report((batchIndex, fileOffset + buffer.Count));
+            }
         }
+    }
+
+    /// <summary>
+    /// Backward compatibility overload without cancellation and progress support.
+    /// </summary>
+    public static IEnumerable<RenderableBatch> ProcessLinesInBatches(IEnumerable<string> lines, int batchSize, ThemeName themeName, string grammarId, bool isExtension = false)
+    {
+        return ProcessLinesInBatches(lines, batchSize, themeName, grammarId, isExtension, CancellationToken.None, null);
     }
 
     /// <summary>
     /// Helper to stream a file by reading lines lazily and processing them in batches.
     /// </summary>
-    public static IEnumerable<RenderableBatch> ProcessFileInBatches(string filePath, int batchSize, ThemeName themeName, string grammarId, bool isExtension = false)
+    /// <param name="filePath">Path to the file to process</param>
+    /// <param name="batchSize">Number of lines to process per batch</param>
+    /// <param name="themeName">Theme to apply for styling</param>
+    /// <param name="grammarId">Language ID or file extension for grammar selection</param>
+    /// <param name="isExtension">True if grammarId is a file extension, false if it's a language ID</param>
+    /// <param name="cancellationToken">Token to monitor for cancellation requests</param>
+    /// <param name="progress">Optional progress reporter for tracking processing status</param>
+    /// <returns>Enumerable of RenderableBatch objects containing processed lines</returns>
+    /// <exception cref="FileNotFoundException">Thrown when the specified file does not exist</exception>
+    /// <exception cref="ArgumentNullException">Thrown when lines enumerable is null</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when batchSize is less than or equal to zero</exception>
+    /// <exception cref="InvalidOperationException">Thrown when grammar cannot be found</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancellation is requested</exception>
+    public static IEnumerable<RenderableBatch> ProcessFileInBatches(
+        string filePath,
+        int batchSize,
+        ThemeName themeName,
+        string grammarId,
+        bool isExtension = false,
+        CancellationToken cancellationToken = default,
+        IProgress<(int batchIndex, long linesProcessed)>? progress = null)
     {
         if (!File.Exists(filePath)) throw new FileNotFoundException(filePath);
-        return ProcessLinesInBatches(File.ReadLines(filePath), batchSize, themeName, grammarId, isExtension);
+        return ProcessLinesInBatches(File.ReadLines(filePath), batchSize, themeName, grammarId, isExtension, cancellationToken, progress);
+    }
+
+    /// <summary>
+    /// Backward compatibility overload without cancellation and progress support.
+    /// </summary>
+    public static IEnumerable<RenderableBatch> ProcessFileInBatches(string filePath, int batchSize, ThemeName themeName, string grammarId, bool isExtension = false)
+    {
+        return ProcessFileInBatches(filePath, batchSize, themeName, grammarId, isExtension, CancellationToken.None, null);
     }
 }

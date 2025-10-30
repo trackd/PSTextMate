@@ -1,6 +1,7 @@
 ﻿using PwshSpectreConsole.TextMate.Core;
 using System.Threading;
 using TextMateSharp.Grammars;
+using MarkdownRenderer = PwshSpectreConsole.TextMate.Core.Markdown.MarkdownRenderer;
 
 namespace PwshSpectreConsole.TextMate.Tests.Integration;
 
@@ -11,7 +12,7 @@ namespace PwshSpectreConsole.TextMate.Tests.Integration;
 public class TaskListIntegrationTests
 {
     [Fact]
-    public void MarkdigSpectreMarkdownRenderer_TaskList_ProducesCorrectCheckboxes()
+    public void MarkdownRenderer_TaskList_ProducesCorrectCheckboxes()
     {
         // Arrange
         var markdown = """
@@ -27,7 +28,7 @@ public class TaskListIntegrationTests
         var themeName = ThemeName.DarkPlus;
 
         // Act
-        var result = MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
+        var result = MarkdownRenderer.Render(markdown, theme, themeName);
 
         // Assert
         result.Should().NotBeNull();
@@ -48,21 +49,21 @@ public class TaskListIntegrationTests
     [InlineData("- [ ] Incomplete", false)]
     [InlineData("- [X] Uppercase completed", true)]
     [InlineData("- Regular item", false)]
-    public void MarkdigSpectreMarkdownRenderer_VariousTaskListFormats_RendersWithoutErrors(string markdown, bool isTaskList)
+    public void MarkdownRenderer_VariousTaskListFormats_RendersWithoutErrors(string markdown, bool isTaskList)
     {
         // Arrange
         var theme = CreateTestTheme();
         var themeName = ThemeName.DarkPlus;
 
         // Act & Assert - Should not throw exceptions
-        var result = MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
+        var result = MarkdownRenderer.Render(markdown, theme, themeName);
 
         result.Should().NotBeNull();
         result.Renderables.Should().NotBeEmpty();
     }
 
     [Fact]
-    public void MarkdigSpectreMarkdownRenderer_ComplexTaskList_RendersWithoutReflectionErrors()
+    public void MarkdownRenderer_ComplexTaskList_RendersWithoutReflectionErrors()
     {
         // Arrange
         var markdown = """
@@ -86,7 +87,7 @@ public class TaskListIntegrationTests
         var themeName = ThemeName.DarkPlus;
 
         // Act & Assert - This would fail with reflection errors if not fixed
-        var result = MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
+        var result = MarkdownRenderer.Render(markdown, theme, themeName);
 
         result.Should().NotBeNull();
         result.Renderables.Should().NotBeEmpty();

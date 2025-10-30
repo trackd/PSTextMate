@@ -36,7 +36,7 @@ Get-ChildItem -Path (Join-Path -Path $outputfolder -ChildPath 'runtimes' | Join-
 Get-ChildItem -Path (Join-Path -Path $outputfolder -ChildPath 'runtimes' | Join-Path -ChildPath 'linux-x64' | Join-Path -ChildPath 'native') -Filter *.so | Copy-Item -Destination $moduleLibFolder -Force
 Move-Item (Join-Path -Path $outputfolder -ChildPath 'PSTextMate.dll') -Destination (Split-Path $moduleLibFolder) -Force
 Get-ChildItem -Path $outputfolder -File |
-    Where-Object { -Not $_.Name.StartsWith('System.Text') -And $_.Extension -notin '.json','.pdb' } |
+    Where-Object { -Not $_.Name.StartsWith('System.Text') -And $_.Extension -notin '.json','.pdb','.xml' } |
         Move-Item -Destination $moduleLibFolder -Force
 
 Pop-Location

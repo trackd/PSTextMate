@@ -10,15 +10,27 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 [Cmdlet(VerbsDiagnostic.Test, "SupportedTextMate")]
 public sealed class TestSupportedTextMateCmdlet : PSCmdlet
 {
+    /// <summary>
+    /// File extension to test for support (e.g., '.ps1').
+    /// </summary>
     [Parameter()]
     public string? Extension { get; set; }
 
+    /// <summary>
+    /// Language ID to test for support (e.g., 'powershell').
+    /// </summary>
     [Parameter()]
     public string? Language { get; set; }
 
+    /// <summary>
+    /// File path to test for support.
+    /// </summary>
     [Parameter()]
     public string? File { get; set; }
 
+    /// <summary>
+    /// Finalizes processing and outputs support check results.
+    /// </summary>
     protected override void EndProcessing()
     {
         if (!string.IsNullOrEmpty(File))
@@ -44,6 +56,9 @@ public sealed class TestSupportedTextMateCmdlet : PSCmdlet
 [Cmdlet(VerbsCommon.Get, "SupportedTextMate")]
 public sealed class GetSupportedTextMateCmdlet : PSCmdlet
 {
+    /// <summary>
+    /// Finalizes processing and outputs all supported languages.
+    /// </summary>
     protected override void EndProcessing()
     {
         WriteObject(TextMateHelper.AvailableLanguages, enumerateCollection: true);

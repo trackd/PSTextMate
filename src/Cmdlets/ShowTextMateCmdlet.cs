@@ -13,22 +13,29 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
 [Alias("st","Show-Code")]
-[OutputType(typeof(RenderableBatch))]
+[OutputType(typeof(Spectre.Console.Rows), ParameterSetName = new[] { "String" })]
+[OutputType(typeof(Spectre.Console.Rows), ParameterSetName = new[] { "Path" })]
+[OutputType(typeof(RenderableBatch), ParameterSetName = new[] { "Path" })]
 public sealed class ShowTextMateCmdlet : PSCmdlet
 {
     private static readonly string[] NewLineSplit = ["\r\n", "\n", "\r"];
     private readonly List<string> _inputObjectBuffer = [];
     private string? _sourceExtensionHint;
 
+    /// <summary>
+    /// String content to render with syntax highlighting.
+    /// </summary>
     [Parameter(
         Mandatory = true,
         ValueFromPipeline = true,
         ParameterSetName = "String"
     )]
     [AllowEmptyString]
-    [ValidateNotNull]
-    public string? InputObject { get; set; }
+    public string InputObject { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Path to file to render with syntax highlighting.
+    /// </summary>
     [Parameter(
         Mandatory = true,
         ValueFromPipelineByPropertyName = true,
@@ -37,8 +44,12 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     )]
     [ValidateNotNullOrEmpty]
     [Alias("FullName")]
-    public string? Path { get; set; }
+    public string Path { get; set; } = string.Empty;
 
+    /// <summary>
+    /// TextMate language ID for syntax highlighting (e.g., 'powershell', 'csharp', 'python').
+    /// If not specified, detected from file extension or content.
+    /// </summary>
     [Parameter(
         ParameterSetName = "String"
     )]
@@ -48,20 +59,35 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
     [ArgumentCompleter(typeof(LanguageCompleter))]
     public string? Language { get; set; }
 
+    /// <summary>
+    /// Color theme to use for syntax highlighting.
+    /// </summary>
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
 
+    /// <summary>
+    /// Returns the rendered output object instead of writing directly to host.
+    /// </summary>
     [Parameter]
     public SwitchParameter PassThru { get; set; }
 
+    /// <summary>
+    /// Enables streaming mode for large files, processing in batches.
+    /// </summary>
     [Parameter(
         ParameterSetName = "Path"
     )]
     public SwitchParameter Stream { get; set; }
 
+    /// <summary>
+    /// Number of lines to process per batch when streaming (default: 1000).
+    /// </summary>
     [Parameter(ParameterSetName = "Path")]
     public int BatchSize { get; set; } = 1000;
 
+    /// <summary>
+    /// Processes each input record from the pipeline.
+    /// </summary>
     protected override void ProcessRecord()
     {
         if (ParameterSetName == "String" && InputObject is not null)
@@ -111,6 +137,9 @@ public sealed class ShowTextMateCmdlet : PSCmdlet
         }
     }
 
+    /// <summary>
+    /// Finalizes processing after all pipeline records have been processed.
+    /// </summary>
     protected override void EndProcessing()
     {
         // For Path parameter set, each record is processed in ProcessRecord to support streaming multiple files.

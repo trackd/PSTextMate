@@ -11,10 +11,14 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// Provides detailed diagnostic information for troubleshooting rendering issues.
 /// </summary>
 [Cmdlet(VerbsDiagnostic.Debug, "TextMate", DefaultParameterSetName = "String")]
+[OutputType(typeof(Test.TextMateDebug))]
 public sealed class DebugTextMateCmdlet : PSCmdlet
 {
     private readonly List<string> _inputObjectBuffer = new();
 
+    /// <summary>
+    /// String content to debug.
+    /// </summary>
     [Parameter(
         Mandatory = true,
         ValueFromPipeline = true,
@@ -23,6 +27,9 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
     [AllowEmptyString]
     public string InputObject { get; set; } = null!;
 
+    /// <summary>
+    /// Path to file to debug.
+    /// </summary>
     [Parameter(
         Mandatory = true,
         ValueFromPipelineByPropertyName = true,
@@ -33,15 +40,24 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
     [Alias("FullName")]
     public string Path { get; set; } = null!;
 
+    /// <summary>
+    /// TextMate language ID (default: 'powershell').
+    /// </summary>
     [Parameter(
         ParameterSetName = "String"
     )]
     [ValidateSet(typeof(TextMateLanguages))]
     public string Language { get; set; } = "powershell";
 
+    /// <summary>
+    /// Color theme for debug output (default: Dark).
+    /// </summary>
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.Dark;
 
+    /// <summary>
+    /// Override file extension for language detection.
+    /// </summary>
     [Parameter(
         ParameterSetName = "Path"
     )]
@@ -50,6 +66,9 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
     [Alias("As")]
     public string ExtensionOverride { get; set; } = null!;
 
+    /// <summary>
+    /// Processes each input record from the pipeline.
+    /// </summary>
     protected override void ProcessRecord()
     {
         if (ParameterSetName == "String" && InputObject is not null)
@@ -58,6 +77,9 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
         }
     }
 
+    /// <summary>
+    /// Finalizes processing and outputs debug information.
+    /// </summary>
     protected override void EndProcessing()
     {
         try
@@ -98,33 +120,52 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
 /// Cmdlet for debugging individual TextMate tokens and their properties.
 /// Provides low-level token analysis for detailed syntax highlighting inspection.
 /// </summary>
+[OutputType(typeof(Core.TokenDebugInfo))]
 [Cmdlet(VerbsDiagnostic.Debug, "TextMateTokens", DefaultParameterSetName = "String")]
 public sealed class DebugTextMateTokensCmdlet : PSCmdlet
 {
     private readonly List<string> _inputObjectBuffer = new();
 
+    /// <summary>
+    /// String content to analyze tokens from.
+    /// </summary>
     [Parameter(Mandatory = true, ValueFromPipeline = true, ParameterSetName = "String")]
     [AllowEmptyString]
     public string InputObject { get; set; } = null!;
 
+    /// <summary>
+    /// Path to file to analyze tokens from.
+    /// </summary>
     [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, ParameterSetName = "Path", Position = 0)]
     [ValidateNotNullOrEmpty]
     [Alias("FullName")]
     public string Path { get; set; } = null!;
 
+    /// <summary>
+    /// TextMate language ID (default: 'powershell').
+    /// </summary>
     [Parameter(ParameterSetName = "String")]
     [ValidateSet(typeof(TextMateLanguages))]
     public string Language { get; set; } = "powershell";
 
+    /// <summary>
+    /// Color theme for token analysis (default: DarkPlus).
+    /// </summary>
     [Parameter()]
     public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
 
+    /// <summary>
+    /// Override file extension for language detection.
+    /// </summary>
     [Parameter(ParameterSetName = "Path")]
     [TextMateExtensionTransform()]
     [ValidateSet(typeof(TextMateExtensions))]
     [Alias("As")]
     public string ExtensionOverride { get; set; } = null!;
 
+    /// <summary>
+    /// Processes each input record from the pipeline.
+    /// </summary>
     protected override void ProcessRecord()
     {
         if (ParameterSetName == "String" && InputObject is not null)
@@ -133,6 +174,9 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
         }
     }
 
+    /// <summary>
+    /// Finalizes processing and outputs token debug information.
+    /// </summary>
     protected override void EndProcessing()
     {
         try
@@ -176,6 +220,9 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
 [Cmdlet(VerbsDiagnostic.Debug, "SixelSupport")]
 public sealed class DebugSixelSupportCmdlet : PSCmdlet
 {
+    /// <summary>
+    /// Processes the cmdlet and outputs Sixel support diagnostic information.
+    /// </summary>
     protected override void ProcessRecord()
     {
         try
@@ -214,12 +261,21 @@ public sealed class DebugSixelSupportCmdlet : PSCmdlet
 [Cmdlet(VerbsDiagnostic.Test, "ImageRendering")]
 public sealed class TestImageRenderingCmdlet : PSCmdlet
 {
+    /// <summary>
+    /// URL or path to image for rendering test.
+    /// </summary>
     [Parameter(Mandatory = true, Position = 0)]
     public string ImageUrl { get; set; } = null!;
 
-    [Parameter()]
+    /// <summary>
+    /// Alternative text for the image.
+    /// </summary>
+    [Parameter(Position = 1)]
     public string AltText { get; set; } = "Test Image";
 
+    /// <summary>
+    /// Processes the cmdlet and tests image rendering.
+    /// </summary>
     protected override void ProcessRecord()
     {
         try

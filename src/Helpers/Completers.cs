@@ -47,7 +47,7 @@ public sealed class LanguageCompleter : IArgumentCompleter
         if (!wantsExtensionsOnly)
         {
             // Languages first
-            foreach (string lang in TextMateHelper.Languages ?? Array.Empty<string>())
+            foreach (string lang in TextMateHelper.Languages ?? [])
             {
                 if (!Match(lang)) continue;
                 results.Add(new CompletionResult(
@@ -59,7 +59,7 @@ public sealed class LanguageCompleter : IArgumentCompleter
         }
 
         // Extensions (always include if requested or no leading '.')
-        foreach (string ext in TextMateHelper.Extensions ?? Array.Empty<string>())
+        foreach (string ext in TextMateHelper.Extensions ?? [])
         {
             if (!Match(ext)) continue;
             string completion = ext; // keep dot in completion

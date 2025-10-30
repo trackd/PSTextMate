@@ -3,6 +3,7 @@ using Markdig;
 using Markdig.Syntax;
 using Markdig.Extensions.Tables;
 using PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
+using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
 
 namespace PwshSpectreConsole.TextMate.Tests.Core.Markdown;

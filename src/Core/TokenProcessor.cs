@@ -30,13 +30,17 @@ internal static class TokenProcessor
     /// <param name="line">Source line text</param>
     /// <param name="theme">Theme for styling</param>
     /// <param name="builder">StringBuilder for output</param>
+    /// <param name="debugCallback">Optional callback for debugging</param>
+    /// <param name="lineIndex">Line index for debugging context</param>
+    /// <param name="escapeMarkup">Whether to escape markup characters (true for normal text, false for code blocks)</param>
     public static void ProcessTokensBatch(
         IToken[] tokens,
         string line,
         Theme theme,
         StringBuilder builder,
         Action<TokenDebugInfo>? debugCallback = null,
-        int? lineIndex = null)
+        int? lineIndex = null,
+        bool escapeMarkup = true)
     {
         foreach (IToken token in tokens)
         {
@@ -58,62 +62,8 @@ internal static class TokenProcessor
             }
 
             // Use the returning API so callers can append with style consistently (prevents markup regressions)
-            (string processedText, Style? resolvedStyle) = WriteTokenOptimizedReturn(textSpan, style, theme, escapeMarkup: true);
+            (string processedText, Style? resolvedStyle) = WriteTokenOptimizedReturn(textSpan, style, theme, escapeMarkup);
             builder.AppendWithStyle(resolvedStyle, processedText);
-
-            debugCallback?.Invoke(new TokenDebugInfo
-            {
-                LineIndex = lineIndex,
-                StartIndex = startIndex,
-                EndIndex = endIndex,
-                Text = line.SubstringAtIndexes(startIndex, endIndex),
-                Scopes = token.Scopes,
-                Foreground = foreground,
-                Background = background,
-                FontStyle = fontStyle,
-                Style = style,
-                Theme = theme.GetGuiColorDictionary()
-            });
-        }
-    }
-
-    /// <summary>
-    /// Processes tokens from TextMate grammar tokenization without escaping markup.
-    /// Used for code blocks where we want to preserve raw content.
-    /// </summary>
-    /// <param name="tokens">Tokens to process</param>
-    /// <param name="line">Source line text</param>
-    /// <param name="theme">Theme for color resolution</param>
-    /// <param name="builder">StringBuilder to append styled text to</param>
-    /// <param name="debugCallback">Optional callback for debugging token information</param>
-    /// <param name="lineIndex">Line index for debugging context</param>
-    public static void ProcessTokensBatchNoEscape(
-        IToken[] tokens,
-        string line,
-        Theme theme,
-        StringBuilder builder,
-        Action<TokenDebugInfo>? debugCallback = null,
-        int? lineIndex = null)
-    {
-        foreach (IToken token in tokens)
-        {
-            int startIndex = Math.Min(token.StartIndex, line.Length);
-            int endIndex = Math.Min(token.EndIndex, line.Length);
-
-            if (startIndex >= endIndex) continue;
-
-            ReadOnlySpan<char> textSpan = line.SubstringAsSpan(startIndex, endIndex);
-
-            Style? style = GetStyleForScopes(token.Scopes, theme);
-
-            (int foreground, int background, FontStyle fontStyle) = ( -1, -1, FontStyle.NotSet );
-            if (debugCallback is not null)
-            {
-                (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
-            }
-
-            // Use the span-based writer to append raw text without additional escaping
-            WriteTokenOptimized(builder, textSpan, style, theme, escapeMarkup: false);
 
             debugCallback?.Invoke(new TokenDebugInfo
             {

@@ -1,133 +1,31 @@
-using System.Text;
-using PwshSpectreConsole.TextMate.Extensions;
-using Spectre.Console;
-using Spectre.Console.Rendering;
+using PwshSpectreConsole.TextMate.Core.Markdown;
 using TextMateSharp.Grammars;
-using TextMateSharp.Model;
 using TextMateSharp.Themes;
 
 namespace PwshSpectreConsole.TextMate.Core;
 
 /// <summary>
-/// Provides specialized rendering for Markdown content with enhanced link handling.
-/// Includes special processing for Markdown links using Spectre Console link markup.
+/// Provides specialized rendering for Markdown content using the modern Markdig-based renderer.
+/// This facade delegates to the Core.Markdown.MarkdownRenderer which builds Spectre.Console objects directly.
 /// </summary>
+/// <remarks>
+/// Legacy string-based renderer was removed in favor of the object-based Markdig renderer for better performance
+/// and to eliminate VT escape sequence issues.
+/// </remarks>
 internal static class MarkdownRenderer
 {
-
-    public static bool UseMarkdigRenderer { get; set; } = true;
     /// <summary>
     /// Renders Markdown content with special handling for links and enhanced formatting.
     /// </summary>
     /// <param name="lines">Lines to render</param>
     /// <param name="theme">Theme to apply</param>
-    /// <param name="grammar">Markdown grammar</param>
+    /// <param name="grammar">Markdown grammar (used for compatibility, actual rendering uses Markdig)</param>
+    /// <param name="themeName">Theme name for passing to Markdig renderer</param>
+    /// <param name="debugCallback">Optional debug callback (not used by Markdig renderer)</param>
     /// <returns>Rendered rows with markdown syntax highlighting</returns>
-    // Set this to true to use the new Markdig renderer, false for the legacy renderer
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName)
-    {
-        if (UseMarkdigRenderer)
-        {
-            string markdown = string.Join("\n", lines);
-            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
-        }
-        else
-        {
-            return RenderLegacy(lines, theme, grammar, null);
-        }
-    }
-
     public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName, Action<TokenDebugInfo>? debugCallback)
     {
-        if (UseMarkdigRenderer)
-        {
-            string markdown = string.Join("\n", lines);
-            return MarkdigSpectreMarkdownRenderer.Render(markdown, theme, themeName);
-        }
-        else
-        {
-            return RenderLegacy(lines, theme, grammar, debugCallback);
-        }
-    }
-
-    // The original legacy renderer logic
-    private static Rows RenderLegacy(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
-    {
-        var builder = new StringBuilder();
-        List<IRenderable> rows = new(lines.Length);
-
-        IStateStack? ruleStack = null;
-        for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
-        {
-            string line = lines[lineIndex];
-            ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
-            ruleStack = result.RuleStack;
-            ProcessMarkdownTokens(result.Tokens, line, theme, builder);
-            debugCallback?.Invoke(new TokenDebugInfo
-            {
-                LineIndex = lineIndex,
-                Text = line,
-                // You can add more fields if you refactor ProcessMarkdownTokens
-            });
-            string? lineMarkup = builder.ToString();
-            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
-            builder.Clear();
-        }
-        return new Rows(rows.ToArray());
-    }
-
-    /// <summary>
-    /// Processes markdown tokens with special handling for links.
-    /// </summary>
-    /// <param name="tokens">Tokens to process</param>
-    /// <param name="line">Source line text</param>
-    /// <param name="theme">Theme for styling</param>
-    /// <param name="builder">StringBuilder for output</param>
-    private static void ProcessMarkdownTokens(IToken[] tokens, string line, Theme theme, StringBuilder builder)
-    {
-        string? url = null;
-        string? title = null;
-
-        for (int i = 0; i < tokens.Length; i++)
-        {
-            IToken token = tokens[i];
-
-            if (token.Scopes.Contains("meta.link.inline.markdown"))
-            {
-                i++; // Skip first bracket token
-                while (i < tokens.Length && tokens[i].Scopes.Contains("meta.link.inline.markdown"))
-                {
-                    if (tokens[i].Scopes.Contains("string.other.link.title.markdown"))
-                    {
-                        title = line.SubstringAtIndexes(tokens[i].StartIndex, tokens[i].EndIndex);
-                    }
-                    if (tokens[i].Scopes.Contains("markup.underline.link.markdown"))
-                    {
-                        url = line.SubstringAtIndexes(tokens[i].StartIndex, tokens[i].EndIndex);
-                    }
-                    if (title is not null && url is not null)
-                    {
-                        builder.Append(MarkdownLinkFormatter.WriteMarkdownLink(url, title));
-                        title = null;
-                        url = null;
-                    }
-                    i++;
-                }
-                continue;
-            }
-
-            int startIndex = Math.Min(token.StartIndex, line.Length);
-            int endIndex = Math.Min(token.EndIndex, line.Length);
-
-            if (startIndex >= endIndex) continue;
-
-            ReadOnlySpan<char> textSpan = line.SubstringAsSpan(startIndex, endIndex);
-
-            // Use the cached Style where possible to avoid rebuilding Style objects per token
-            Style? style = TokenProcessor.GetStyleForScopes(token.Scopes, theme);
-
-            // Append escaped/unstyled text directly to the provided StringBuilder
-            TokenProcessor.WriteTokenOptimized(builder, textSpan, style, theme, escapeMarkup: true);
-        }
+        string markdown = string.Join("\n", lines);
+        return Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
     }
 }

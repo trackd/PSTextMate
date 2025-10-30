@@ -7,5 +7,5 @@ namespace PwshSpectreConsole.TextMate.Core;
 /// </summary>
 public sealed record Rows(IRenderable[] Renderables)
 {
-    public static Rows Empty { get; } = new Rows(Array.Empty<IRenderable>());
+    public static Rows Empty { get; } = new Rows([]);
 }

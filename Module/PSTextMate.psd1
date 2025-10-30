@@ -1,6 +1,6 @@
 @{
     RootModule           = 'PSTextMate.dll'
-    ModuleVersion        = '0.0.3'
+    ModuleVersion        = '0.1.0'
     GUID                 = '5ba21f1d-5ca4-49df-9a07-a2ad379feb00'
     Author               = 'trackd'
     CompanyName          = 'trackd'

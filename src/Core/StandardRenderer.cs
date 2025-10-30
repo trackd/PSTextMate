@@ -3,6 +3,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
+using PwshSpectreConsole.TextMate.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core;
 
@@ -27,32 +28,36 @@ internal static class StandardRenderer
 
     public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
     {
-        var builder = new StringBuilder();
+        var builder = StringBuilderPool.Rent();
         List<IRenderable> rows = new(lines.Length);
 
         try
         {
-        IStateStack? ruleStack = null;
-        for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
-        {
-            string line = lines[lineIndex];
-            ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
-            ruleStack = result.RuleStack;
-            TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback, lineIndex);
-            string? lineMarkup = builder.ToString();
-            rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
-            builder.Clear();
-        }
+            IStateStack? ruleStack = null;
+            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            {
+                string line = lines[lineIndex];
+                ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
+                ruleStack = result.RuleStack;
+                TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback, lineIndex);
+                string? lineMarkup = builder.ToString();
+                rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
+                builder.Clear();
+            }
 
-        return new Rows([.. rows]);
+            return new Rows([.. rows]);
         }
         catch (ArgumentException ex)
         {
-            throw new InvalidOperationException($"Argument error rendering content: {ex.Message}", ex);
+            throw new InvalidOperationException($"Argument error during rendering: {ex.Message}", ex);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Unexpected error rendering content: {ex.Message}", ex);
+            throw new InvalidOperationException($"Unexpected error during rendering: {ex.Message}", ex);
+        }
+        finally
+        {
+            StringBuilderPool.Return(builder);
         }
     }
 }

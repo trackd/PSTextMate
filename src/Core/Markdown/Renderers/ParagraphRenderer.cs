@@ -1,13 +1,13 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Text;
+using System.Text.RegularExpressions;
+using Markdig.Extensions;
 using Markdig.Extensions.AutoLinks;
+using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
-using Markdig.Extensions;
-using Markdig.Extensions.TaskLists;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
-using System.Text;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -15,8 +15,7 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 /// Paragraph renderer that builds Spectre.Console objects directly instead of markup strings.
 /// This eliminates VT escaping issues and avoids double-parsing overhead.
 /// </summary>
-internal static partial class ParagraphRenderer
-{
+internal static partial class ParagraphRenderer {
     // reuse static arrays for common scope queries to avoid allocating new arrays per call
     private static readonly string[] LinkScope = ["markup.underline.link"];
 
@@ -27,12 +26,10 @@ internal static partial class ParagraphRenderer
     /// <param name="paragraph">The paragraph block to render</param>
     /// <param name="theme">Theme for styling</param>
     /// <returns>Rendered paragraph as a Paragraph object with proper inline styling</returns>
-    public static IRenderable Render(ParagraphBlock paragraph, Theme theme)
-    {
+    public static IRenderable Render(ParagraphBlock paragraph, Theme theme) {
         var spectreConsole = new Paragraph();
 
-        if (paragraph.Inline is not null)
-        {
+        if (paragraph.Inline is not null) {
             ProcessInlineElements(spectreConsole, paragraph.Inline, theme);
         }
 
@@ -42,22 +39,16 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Processes inline elements and adds them directly to the Paragraph with appropriate styling.
     /// </summary>
-    internal static void ProcessInlineElements(Paragraph paragraph, ContainerInline inlines, Theme theme)
-    {
-        foreach (Inline inline in inlines)
-        {
-            switch (inline)
-            {
+    internal static void ProcessInlineElements(Paragraph paragraph, ContainerInline inlines, Theme theme) {
+        foreach (Inline inline in inlines) {
+            switch (inline) {
                 case LiteralInline literal:
                     string literalText = literal.Content.ToString();
 
                     // Check for username patterns like @username
-                    if (TryParseUsernameLinks(literalText, out TextSegment[]? segments))
-                    {
-                        foreach (TextSegment segment in segments)
-                        {
-                            if (segment.IsUsername)
-                            {
+                    if (TryParseUsernameLinks(literalText, out TextSegment[]? segments)) {
+                        foreach (TextSegment segment in segments) {
+                            if (segment.IsUsername) {
                                 // Create clickable username link (you could customize the URL pattern)
                                 var usernameStyle = new Style(
                                     foreground: Color.Blue,
@@ -66,14 +57,12 @@ internal static partial class ParagraphRenderer
                                 );
                                 paragraph.Append(segment.Text, usernameStyle);
                             }
-                            else
-                            {
+                            else {
                                 paragraph.Append(segment.Text, Style.Plain);
                             }
                         }
                     }
-                    else
-                    {
+                    else {
                         paragraph.Append(literalText, Style.Plain);
                     }
                     break;
@@ -120,11 +109,9 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Processes emphasis (bold/italic) inline elements while preserving nested links.
     /// </summary>
-    private static void ProcessEmphasisInline(Paragraph paragraph, EmphasisInline emphasis, Theme theme)
-    {
+    private static void ProcessEmphasisInline(Paragraph paragraph, EmphasisInline emphasis, Theme theme) {
         // Determine emphasis style based on delimiter count
-        Decoration decoration = emphasis.DelimiterCount switch
-        {
+        Decoration decoration = emphasis.DelimiterCount switch {
             1 => Decoration.Italic,      // Single * or _
             2 => Decoration.Bold,        // Double ** or __
             3 => Decoration.Bold | Decoration.Italic, // Triple *** or ___
@@ -139,23 +126,17 @@ internal static partial class ParagraphRenderer
     /// Processes inline elements while applying a decoration (like bold/italic) to text elements,
     /// but preserving special handling for links and other complex inlines.
     /// </summary>
-    private static void ProcessInlineElementsWithDecoration(Paragraph paragraph, ContainerInline container, Decoration decoration, Theme theme)
-    {
-        foreach (Inline inline in container)
-        {
-            switch (inline)
-            {
+    private static void ProcessInlineElementsWithDecoration(Paragraph paragraph, ContainerInline container, Decoration decoration, Theme theme) {
+        foreach (Inline inline in container) {
+            switch (inline) {
                 case LiteralInline literal:
                     string literalText = literal.Content.ToString();
                     var emphasisStyle = new Style(decoration: decoration);
 
                     // Check for username patterns like @username
-                    if (TryParseUsernameLinks(literalText, out TextSegment[]? segments))
-                    {
-                        foreach (TextSegment segment in segments)
-                        {
-                            if (segment.IsUsername)
-                            {
+                    if (TryParseUsernameLinks(literalText, out TextSegment[]? segments)) {
+                        foreach (TextSegment segment in segments) {
+                            if (segment.IsUsername) {
                                 // Create clickable username link with emphasis
                                 var usernameStyle = new Style(
                                     foreground: Color.Blue,
@@ -164,14 +145,12 @@ internal static partial class ParagraphRenderer
                                 );
                                 paragraph.Append(segment.Text, usernameStyle);
                             }
-                            else
-                            {
+                            else {
                                 paragraph.Append(segment.Text, emphasisStyle);
                             }
                         }
                     }
-                    else
-                    {
+                    else {
                         paragraph.Append(literalText, emphasisStyle);
                     }
                     break;
@@ -188,8 +167,7 @@ internal static partial class ParagraphRenderer
 
                 case EmphasisInline nestedEmphasis:
                     // Handle nested emphasis by combining decorations
-                    Decoration nestedDecoration = nestedEmphasis.DelimiterCount switch
-                    {
+                    Decoration nestedDecoration = nestedEmphasis.DelimiterCount switch {
                         1 => Decoration.Italic,
                         2 => Decoration.Bold,
                         3 => Decoration.Bold | Decoration.Italic,
@@ -214,12 +192,10 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Processes a link inline while applying emphasis decoration.
     /// </summary>
-    private static void ProcessLinkInlineWithDecoration(Paragraph paragraph, LinkInline link, Decoration emphasisDecoration, Theme theme)
-    {
+    private static void ProcessLinkInlineWithDecoration(Paragraph paragraph, LinkInline link, Decoration emphasisDecoration, Theme theme) {
         // Use link text if available, otherwise use URL
         string linkText = ExtractInlineText(link);
-        if (string.IsNullOrEmpty(linkText))
-        {
+        if (string.IsNullOrEmpty(linkText)) {
             linkText = link.Url ?? "";
         }
 
@@ -237,8 +213,7 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Processes inline code elements with syntax highlighting.
     /// </summary>
-    private static void ProcessCodeInline(Paragraph paragraph, CodeInline code, Theme theme)
-    {
+    private static void ProcessCodeInline(Paragraph paragraph, CodeInline code, Theme theme) {
         // Get theme colors for inline code
         string[] codeScopes = ["markup.inline.raw"];
         (int codeFg, int codeBg, FontStyle codeFs) = TokenProcessor.ExtractThemeProperties(
@@ -256,17 +231,15 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Processes link inline elements with clickable links using Spectre.Console Style with link parameter.
     /// </summary>
-    private static void ProcessLinkInline(Paragraph paragraph, LinkInline link, Theme theme)
-    {
+    private static void ProcessLinkInline(Paragraph paragraph, LinkInline link, Theme theme) {
         // Use link text if available, otherwise use URL
         string linkText = ExtractInlineText(link);
-        if (string.IsNullOrEmpty(linkText))
-        {
+        if (string.IsNullOrEmpty(linkText)) {
             linkText = link.Url ?? "";
         }
 
         // Get theme colors for links
-        string[] linkScopes = new[] { "markup.underline.link" };
+        string[] linkScopes = ["markup.underline.link"];
         (int linkFg, int linkBg, FontStyle linkFs) = TokenProcessor.ExtractThemeProperties(
             new MarkdownToken(linkScopes), theme);
 
@@ -289,11 +262,9 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Processes Markdig AutolinkInline (URLs/emails detected by UseAutoLinks).
     /// </summary>
-    private static void ProcessAutoLinkInline(Paragraph paragraph, AutolinkInline autoLink, Theme theme)
-    {
+    private static void ProcessAutoLinkInline(Paragraph paragraph, AutolinkInline autoLink, Theme theme) {
         string url = autoLink.Url ?? string.Empty;
-        if (string.IsNullOrEmpty(url))
-        {
+        if (string.IsNullOrEmpty(url)) {
             // Nothing to render
             return;
         }
@@ -321,9 +292,8 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Extracts plain text from inline elements without markup.
     /// </summary>
-    private static string ExtractInlineText(Inline inline)
-    {
-        var builder = new System.Text.StringBuilder();
+    private static string ExtractInlineText(Inline inline) {
+        var builder = new StringBuilder();
         ExtractInlineTextRecursive(inline, builder);
         return builder.ToString();
     }
@@ -336,26 +306,22 @@ internal static partial class ParagraphRenderer
     /// <summary>
     /// Tries to parse username links (@username) from literal text.
     /// </summary>
-    private static bool TryParseUsernameLinks(string text, out TextSegment[] segments)
-    {
+    private static bool TryParseUsernameLinks(string text, out TextSegment[] segments) {
         var segmentList = new List<TextSegment>();
 
         // Simple regex to find @username patterns
-        var usernamePattern = RegNumLet();
+        Regex usernamePattern = RegNumLet();
         MatchCollection matches = usernamePattern.Matches(text);
 
-        if (matches.Count == 0)
-        {
+        if (matches.Count == 0) {
             segments = [];
             return false;
         }
 
         int lastIndex = 0;
-        foreach (System.Text.RegularExpressions.Match match in matches)
-        {
+        foreach (Match match in matches) {
             // Add text before the username
-            if (match.Index > lastIndex)
-            {
+            if (match.Index > lastIndex) {
                 segmentList.Add(new TextSegment(text[lastIndex..match.Index], false));
             }
 
@@ -365,39 +331,35 @@ internal static partial class ParagraphRenderer
         }
 
         // Add remaining text
-        if (lastIndex < text.Length)
-        {
+        if (lastIndex < text.Length) {
             segmentList.Add(new TextSegment(text[lastIndex..], false));
         }
 
-        segments = segmentList.ToArray();
+        segments = [.. segmentList];
         return true;
     }
 
-    private static void ExtractInlineTextRecursive(Inline inline, StringBuilder builder)
-    {
-        switch (inline)
-        {
+    private static void ExtractInlineTextRecursive(Inline inline, StringBuilder builder) {
+        switch (inline) {
             case LiteralInline literal:
                 builder.Append(literal.Content.ToString());
                 break;
 
             case ContainerInline container:
-                foreach (Inline child in container)
-                {
+                foreach (Inline child in container) {
                     ExtractInlineTextRecursive(child, builder);
                 }
                 break;
 
             case LeafInline leaf:
-                if (leaf is CodeInline code)
-                {
+                if (leaf is CodeInline code) {
                     builder.Append(code.Content);
                 }
-                else if (leaf is LineBreakInline)
-                {
+                else if (leaf is LineBreakInline) {
                     builder.Append('\n');
                 }
+                break;
+            default:
                 break;
         }
     }

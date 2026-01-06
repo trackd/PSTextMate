@@ -8,8 +8,7 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// Provides validation functionality to check compatibility before processing.
 /// </summary>
 [Cmdlet(VerbsDiagnostic.Test, "SupportedTextMate")]
-public sealed class TestSupportedTextMateCmdlet : PSCmdlet
-{
+public sealed class TestSupportedTextMateCmdlet : PSCmdlet {
     /// <summary>
     /// File extension to test for support (e.g., '.ps1').
     /// </summary>
@@ -31,18 +30,14 @@ public sealed class TestSupportedTextMateCmdlet : PSCmdlet
     /// <summary>
     /// Finalizes processing and outputs support check results.
     /// </summary>
-    protected override void EndProcessing()
-    {
-        if (!string.IsNullOrEmpty(File))
-        {
+    protected override void EndProcessing() {
+        if (!string.IsNullOrEmpty(File)) {
             WriteObject(TextMateExtensions.IsSupportedFile(File));
         }
-        if (!string.IsNullOrEmpty(Extension))
-        {
+        if (!string.IsNullOrEmpty(Extension)) {
             WriteObject(TextMateExtensions.IsSupportedExtension(Extension));
         }
-        if (!string.IsNullOrEmpty(Language))
-        {
+        if (!string.IsNullOrEmpty(Language)) {
             WriteObject(TextMateLanguages.IsSupportedLanguage(Language));
         }
     }
@@ -54,13 +49,9 @@ public sealed class TestSupportedTextMateCmdlet : PSCmdlet
 /// </summary>
 [OutputType(typeof(Language))]
 [Cmdlet(VerbsCommon.Get, "SupportedTextMate")]
-public sealed class GetSupportedTextMateCmdlet : PSCmdlet
-{
+public sealed class GetSupportedTextMateCmdlet : PSCmdlet {
     /// <summary>
     /// Finalizes processing and outputs all supported languages.
     /// </summary>
-    protected override void EndProcessing()
-    {
-        WriteObject(TextMateHelper.AvailableLanguages, enumerateCollection: true);
-    }
+    protected override void EndProcessing() => WriteObject(TextMateHelper.AvailableLanguages, enumerateCollection: true);
 }

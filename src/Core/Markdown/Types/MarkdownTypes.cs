@@ -8,8 +8,7 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Types;
 /// Represents the result of rendering a markdown block element.
 /// Provides type safety and better error handling for rendering operations.
 /// </summary>
-public sealed record MarkdownRenderResult
-{
+public sealed record MarkdownRenderResult {
     /// <summary>
     /// The rendered element that can be displayed by Spectre.Console.
     /// </summary>
@@ -52,26 +51,35 @@ public sealed record MarkdownRenderResult
 /// <summary>
 /// Enumeration of supported markdown block types for better type safety.
 /// </summary>
-public enum MarkdownBlockType
-{
+public enum MarkdownBlockType {
+    /// <summary>Unknown or unrecognized block type.</summary>
     Unknown,
+    /// <summary>Heading block (h1-h6).</summary>
     Heading,
+    /// <summary>Paragraph block with inline content.</summary>
     Paragraph,
+    /// <summary>List block (ordered or unordered).</summary>
     List,
+    /// <summary>Fenced code block with syntax highlighting.</summary>
     FencedCodeBlock,
+    /// <summary>Indented code block.</summary>
     CodeBlock,
+    /// <summary>Table block with cells and rows.</summary>
     Table,
+    /// <summary>Block quote or indented text.</summary>
     Quote,
+    /// <summary>Raw HTML block (sanitized for security).</summary>
     HtmlBlock,
+    /// <summary>Thematic break or horizontal rule.</summary>
     ThematicBreak,
+    /// <summary>Task list with checkboxes.</summary>
     TaskList
 }
 
 /// <summary>
 /// Configuration options for markdown rendering with validation.
 /// </summary>
-public sealed record MarkdownRenderOptions
-{
+public sealed record MarkdownRenderOptions {
     /// <summary>
     /// The theme to use for rendering.
     /// </summary>
@@ -100,8 +108,7 @@ public sealed record MarkdownRenderOptions
     /// <summary>
     /// Validates the render options.
     /// </summary>
-    public void Validate()
-    {
+    public void Validate() {
         if (MaxRenderingDepth <= 0)
             throw new ArgumentException("MaxRenderingDepth must be greater than 0", nameof(MaxRenderingDepth));
     }
@@ -110,8 +117,7 @@ public sealed record MarkdownRenderOptions
 /// <summary>
 /// Represents inline rendering context with type safety.
 /// </summary>
-public sealed record InlineRenderContext
-{
+public sealed record InlineRenderContext {
     /// <summary>
     /// The theme for styling.
     /// </summary>

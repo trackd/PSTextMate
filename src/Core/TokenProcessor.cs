@@ -1,10 +1,10 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Text;
+using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
-using PwshSpectreConsole.TextMate.Extensions;
-using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 
 namespace PwshSpectreConsole.TextMate.Core;
 
@@ -12,8 +12,7 @@ namespace PwshSpectreConsole.TextMate.Core;
 /// Provides optimized token processing and styling operations.
 /// Handles theme property extraction and token rendering with performance optimizations.
 /// </summary>
-internal static class TokenProcessor
-{
+internal static class TokenProcessor {
     // Toggle caching via environment variable PSTEXTMATE_DISABLE_STYLECACHE=1 to disable
     public static readonly bool EnableStyleCache = Environment.GetEnvironmentVariable("PSTEXTMATE_DISABLE_STYLECACHE") != "1";
     // Cache theme extraction results per (scopesKey, themeInstanceHash)
@@ -40,10 +39,8 @@ internal static class TokenProcessor
         StringBuilder builder,
         Action<TokenDebugInfo>? debugCallback = null,
         int? lineIndex = null,
-        bool escapeMarkup = true)
-    {
-        foreach (IToken token in tokens)
-        {
+        bool escapeMarkup = true) {
+        foreach (IToken token in tokens) {
             int startIndex = Math.Min(token.StartIndex, line.Length);
             int endIndex = Math.Min(token.EndIndex, line.Length);
 
@@ -55,9 +52,8 @@ internal static class TokenProcessor
             Style? style = GetStyleForScopes(token.Scopes, theme);
 
             // Only extract numeric theme properties when debugging is enabled to reduce work
-            (int foreground, int background, FontStyle fontStyle) = ( -1, -1, FontStyle.NotSet );
-            if (debugCallback is not null)
-            {
+            (int foreground, int background, FontStyle fontStyle) = (-1, -1, FontStyle.NotSet);
+            if (debugCallback is not null) {
                 (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
             }
 
@@ -65,8 +61,7 @@ internal static class TokenProcessor
             (string processedText, Style? resolvedStyle) = WriteTokenOptimizedReturn(textSpan, style, theme, escapeMarkup);
             builder.AppendWithStyle(resolvedStyle, processedText);
 
-            debugCallback?.Invoke(new TokenDebugInfo
-            {
+            debugCallback?.Invoke(new TokenDebugInfo {
                 LineIndex = lineIndex,
                 StartIndex = startIndex,
                 EndIndex = endIndex,
@@ -81,15 +76,13 @@ internal static class TokenProcessor
         }
     }
 
-    public static (int foreground, int background, FontStyle fontStyle) ExtractThemeProperties(IToken token, Theme theme)
-    {
+    public static (int foreground, int background, FontStyle fontStyle) ExtractThemeProperties(IToken token, Theme theme) {
         // Build a compact key from token scopes (they're mostly immutable per token)
         string scopesKey = string.Join('\u001F', token.Scopes);
         int themeHash = RuntimeHelpers.GetHashCode(theme);
-        var cacheKey = (scopesKey, themeHash);
+        (string scopesKey, int themeHash) cacheKey = (scopesKey, themeHash);
 
-        if (_themePropertyCache.TryGetValue(cacheKey, out (int fg, int bg, FontStyle fs) cached))
-        {
+        if (_themePropertyCache.TryGetValue(cacheKey, out (int fg, int bg, FontStyle fs) cached)) {
             return (cached.fg, cached.bg, cached.fs);
         }
 
@@ -97,8 +90,7 @@ internal static class TokenProcessor
         int background = -1;
         FontStyle fontStyle = FontStyle.NotSet;
 
-        foreach (ThemeTrieElementRule? themeRule in theme.Match(token.Scopes))
-        {
+        foreach (ThemeTrieElementRule? themeRule in theme.Match(token.Scopes)) {
             if (foreground == -1 && themeRule.foreground > 0)
                 foreground = themeRule.foreground;
             if (background == -1 && themeRule.background > 0)
@@ -108,7 +100,7 @@ internal static class TokenProcessor
         }
 
         // Store in cache even if defaults (-1) for future lookups
-        var result = (foreground, background, fontStyle);
+        (int foreground, int background, FontStyle fontStyle) result = (foreground, background, fontStyle);
         _themePropertyCache.TryAdd(cacheKey, result);
         return result;
     }
@@ -123,21 +115,18 @@ internal static class TokenProcessor
         ReadOnlySpan<char> text,
         Style? styleHint,
         Theme theme,
-        bool escapeMarkup = true)
-    {
+        bool escapeMarkup = true) {
         string processedText = escapeMarkup ? Markup.Escape(text.ToString()) : text.ToString();
 
         // Early return for no styling needed
-        if (styleHint is null)
-        {
+        if (styleHint is null) {
             return (processedText, null);
         }
 
         // If the style serializes to an empty markup string, treat it as no style
         // to avoid emitting empty [] tags which Spectre.Markup rejects.
         string styleMarkup = styleHint.ToMarkup();
-        if (string.IsNullOrEmpty(styleMarkup))
-        {
+        if (string.IsNullOrEmpty(styleMarkup)) {
             return (processedText, null);
         }
 
@@ -154,25 +143,19 @@ internal static class TokenProcessor
         ReadOnlySpan<char> text,
         Style? style,
         Theme theme,
-        bool escapeMarkup = true)
-    {
+        bool escapeMarkup = true) {
         // Fast-path: if no escaping needed, append span directly with style-aware overload
-        if (!escapeMarkup)
-        {
-            if (style is not null)
-            {
+        if (!escapeMarkup) {
+            if (style is not null) {
                 string styleMarkup = style.ToMarkup();
-                if (!string.IsNullOrEmpty(styleMarkup))
-                {
+                if (!string.IsNullOrEmpty(styleMarkup)) {
                     builder.Append('[').Append(styleMarkup).Append(']').Append(text).Append("[/]").AppendLine();
                 }
-                else
-                {
+                else {
                     builder.Append(text).AppendLine();
                 }
             }
-            else
-            {
+            else {
                 builder.Append(text).AppendLine();
             }
             return;
@@ -180,32 +163,25 @@ internal static class TokenProcessor
 
         // Check for presence of characters that require escaping. Most common tokens do not contain '[' or ']'
         bool needsEscape = false;
-        foreach (char c in text)
-        {
-            if (c == '[' || c == ']')
-            {
+        foreach (char c in text) {
+            if (c is '[' or ']') {
                 needsEscape = true;
                 break;
             }
         }
 
-        if (!needsEscape)
-        {
+        if (!needsEscape) {
             // Safe fast-path: append span directly
-            if (style is not null)
-            {
+            if (style is not null) {
                 string styleMarkup = style.ToMarkup();
-                if (!string.IsNullOrEmpty(styleMarkup))
-                {
+                if (!string.IsNullOrEmpty(styleMarkup)) {
                     builder.Append('[').Append(styleMarkup).Append(']').Append(text).Append("[/]").AppendLine();
                 }
-                else
-                {
+                else {
                     builder.Append(text).AppendLine();
                 }
             }
-            else
-            {
+            else {
                 builder.Append(text).AppendLine();
             }
             return;
@@ -213,20 +189,16 @@ internal static class TokenProcessor
 
         // Slow path: fallback to the reliable Markup.Escape for correctness when special characters are present
         string escaped = Markup.Escape(text.ToString());
-        if (style is not null)
-        {
+        if (style is not null) {
             string styleMarkup = style.ToMarkup();
-            if (!string.IsNullOrEmpty(styleMarkup))
-            {
+            if (!string.IsNullOrEmpty(styleMarkup)) {
                 builder.Append('[').Append(styleMarkup).Append(']').Append(escaped).Append("[/]").AppendLine();
             }
-            else
-            {
+            else {
                 builder.Append(escaped).AppendLine();
             }
         }
-        else
-        {
+        else {
             builder.Append(escaped).AppendLine();
         }
     }
@@ -234,23 +206,20 @@ internal static class TokenProcessor
     /// <summary>
     /// Returns a cached Style for the given scopes and theme. Returns null for default/no-style.
     /// </summary>
-    public static Style? GetStyleForScopes(IEnumerable<string> scopes, Theme theme)
-    {
+    public static Style? GetStyleForScopes(IEnumerable<string> scopes, Theme theme) {
         string scopesKey = string.Join('\u001F', scopes);
         int themeHash = RuntimeHelpers.GetHashCode(theme);
-        var cacheKey = (scopesKey, themeHash);
+        (string scopesKey, int themeHash) cacheKey = (scopesKey, themeHash);
 
-        if (_styleCache.TryGetValue(cacheKey, out Style? cached))
-        {
+        if (_styleCache.TryGetValue(cacheKey, out Style? cached)) {
             return cached;
         }
 
         // Fallback to extracting properties and building a Style
         // Create a dummy token-like enumerable for existing ExtractThemeProperties method
         var token = new MarkdownToken([.. scopes]);
-        var (fg, bg, fs) = ExtractThemeProperties(token, theme);
-        if (fg == -1 && bg == -1 && fs == FontStyle.NotSet)
-        {
+        (int fg, int bg, FontStyle fs) = ExtractThemeProperties(token, theme);
+        if (fg == -1 && bg == -1 && fs == FontStyle.NotSet) {
             _styleCache.TryAdd(cacheKey, null);
             return null;
         }

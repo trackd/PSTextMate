@@ -9,8 +9,7 @@ namespace PwshSpectreConsole.TextMate.Infrastructure;
 /// Manages caching of expensive TextMate objects for improved performance.
 /// Uses thread-safe collections to handle concurrent access patterns.
 /// </summary>
-internal static class CacheManager
-{
+internal static class CacheManager {
     private static readonly ConcurrentDictionary<ThemeName, (Registry registry, Theme theme)> _themeCache = new();
     private static readonly ConcurrentDictionary<string, IGrammar?> _grammarCache = new();
 
@@ -20,10 +19,8 @@ internal static class CacheManager
     /// </summary>
     /// <param name="themeName">The theme to load</param>
     /// <returns>Cached registry and theme pair</returns>
-    public static (Registry registry, Theme theme) GetCachedTheme(ThemeName themeName)
-    {
-        return _themeCache.GetOrAdd(themeName, name =>
-        {
+    public static (Registry registry, Theme theme) GetCachedTheme(ThemeName themeName) {
+        return _themeCache.GetOrAdd(themeName, name => {
             RegistryOptions options = new(name);
             Registry registry = new(options);
             Theme theme = registry.GetTheme();
@@ -39,11 +36,9 @@ internal static class CacheManager
     /// <param name="grammarId">Language ID or file extension</param>
     /// <param name="isExtension">True if grammarId is a file extension, false if it's a language ID</param>
     /// <returns>Cached grammar instance or null if not found</returns>
-    public static IGrammar? GetCachedGrammar(Registry registry, string grammarId, bool isExtension)
-    {
+    public static IGrammar? GetCachedGrammar(Registry registry, string grammarId, bool isExtension) {
         string cacheKey = $"{grammarId}_{isExtension}";
-        return _grammarCache.GetOrAdd(cacheKey, _ =>
-        {
+        return _grammarCache.GetOrAdd(cacheKey, _ => {
             RegistryOptions options = new(ThemeName.Dark); // Use default for grammar loading
             return isExtension
                 ? registry.LoadGrammar(options.GetScopeByExtension(grammarId))
@@ -54,8 +49,7 @@ internal static class CacheManager
     /// <summary>
     /// Clears all cached objects. Useful for memory management or when themes/grammars change.
     /// </summary>
-    public static void ClearCache()
-    {
+    public static void ClearCache() {
         _themeCache.Clear();
         _grammarCache.Clear();
     }

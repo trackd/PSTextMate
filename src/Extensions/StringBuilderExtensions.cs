@@ -8,8 +8,7 @@ namespace PwshSpectreConsole.TextMate.Extensions;
 /// Provides optimized StringBuilder extension methods for text rendering operations.
 /// Reduces string allocations during the markup generation process.
 /// </summary>
-public static class StringBuilderExtensions
-{
+public static class StringBuilderExtensions {
     /// <summary>
     /// Appends a Spectre.Console link markup: [link=url]text[/]
     /// </summary>
@@ -17,8 +16,7 @@ public static class StringBuilderExtensions
     /// <param name="url">The URL for the link</param>
     /// <param name="text">The link text</param>
     /// <returns>The same StringBuilder for method chaining</returns>
-    public static StringBuilder AppendLink(this StringBuilder builder, string url, string text)
-    {
+    public static StringBuilder AppendLink(this StringBuilder builder, string url, string text) {
         builder.Append("[link=")
                .Append(url.EscapeMarkup())
                .Append(']')
@@ -26,37 +24,49 @@ public static class StringBuilderExtensions
                .Append("[/]");
         return builder;
     }
-    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, int? value)
-    {
-        return AppendWithStyle(builder, style, value?.ToString(CultureInfo.InvariantCulture));
-    }
+    /// <summary>
+    /// Appends an integer value with optional style using invariant culture formatting.
+    /// </summary>
+    /// <param name="builder">StringBuilder to append to</param>
+    /// <param name="style">Optional style to apply</param>
+    /// <param name="value">Nullable integer to append</param>
+    /// <returns>The same StringBuilder for method chaining</returns>
+    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, int? value) => AppendWithStyle(builder, style, value?.ToString(CultureInfo.InvariantCulture));
 
-    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, string? value)
-    {
+    /// <summary>
+    /// Appends a string value with optional style markup, escaping special characters.
+    /// </summary>
+    /// <param name="builder">StringBuilder to append to</param>
+    /// <param name="style">Optional style to apply</param>
+    /// <param name="value">String text to append</param>
+    /// <returns>The same StringBuilder for method chaining</returns>
+    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, string? value) {
         value ??= string.Empty;
-        if (style is not null)
-        {
-            return builder.Append('[')
+        return style is not null
+            ? builder.Append('[')
                 .Append(style.ToMarkup())
                 .Append(']')
                 .Append(value.EscapeMarkup())
-                .Append("[/]");
-        }
-        return builder.Append(value);
+                .Append("[/]")
+            : builder.Append(value);
     }
 
-    public static StringBuilder AppendWithStyleN(this StringBuilder builder, Style? style, string? value)
-    {
+    /// <summary>
+    /// Appends a string value with optional style markup and space separator, escaping special characters.
+    /// </summary>
+    /// <param name="builder">StringBuilder to append to</param>
+    /// <param name="style">Optional style to apply</param>
+    /// <param name="value">String text to append</param>
+    /// <returns>The same StringBuilder for method chaining</returns>
+    public static StringBuilder AppendWithStyleN(this StringBuilder builder, Style? style, string? value) {
         value ??= string.Empty;
-        if (style is not null)
-        {
-            return builder.Append('[')
+        return style is not null
+            ? builder.Append('[')
                 .Append(style.ToMarkup())
                 .Append(']')
                 .Append(value)
-                .Append("[/] ");
-        }
-        return builder.Append(value);
+                .Append("[/] ")
+            : builder.Append(value);
     }
 
     /// <summary>
@@ -67,16 +77,13 @@ public static class StringBuilderExtensions
     /// <param name="style">Optional style to apply</param>
     /// <param name="value">Text content to append</param>
     /// <returns>The same StringBuilder for method chaining</returns>
-    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, ReadOnlySpan<char> value)
-    {
-        if (style is not null)
-        {
-            return builder.Append('[')
+    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, ReadOnlySpan<char> value) {
+        return style is not null
+            ? builder.Append('[')
                 .Append(style.ToMarkup())
                 .Append(']')
                 .Append(value)
-                .Append("[/]");
-        }
-        return builder.Append(value);
+                .Append("[/]")
+            : builder.Append(value);
     }
 }

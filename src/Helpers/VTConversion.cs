@@ -7,8 +7,7 @@ namespace PwshSpectreConsole.TextMate.Core.Helpers;
 /// Efficient parser for VT (Virtual Terminal) escape sequences that converts them to Spectre.Console objects.
 /// Supports RGB colors, 256-color palette, 3-bit colors, and text decorations.
 /// </summary>
-public static class VTParser
-{
+public static class VTParser {
     private const char ESC = '\x1B';
     private const char CSI_START = '[';
     private const char OSC_START = ']';
@@ -22,8 +21,7 @@ public static class VTParser
     /// </summary>
     /// <param name="input">Input string with VT escape sequences</param>
     /// <returns>Paragraph object with parsed styles applied</returns>
-    public static Paragraph ToParagraph(string input)
-    {
+    public static Paragraph ToParagraph(string input) {
         if (string.IsNullOrEmpty(input))
             return new Paragraph();
 
@@ -32,15 +30,12 @@ public static class VTParser
             return new Paragraph(input, Style.Plain);
 
         var paragraph = new Paragraph();
-        foreach (TextSegment segment in segments)
-        {
-            if (segment.HasStyle)
-            {
+        foreach (TextSegment segment in segments) {
+            if (segment.HasStyle) {
                 // Style class supports links directly via constructor parameter
                 paragraph.Append(segment.Text, segment.Style.ToSpectreStyle());
             }
-            else
-            {
+            else {
                 paragraph.Append(segment.Text, Style.Plain);
             }
         }
@@ -51,80 +46,65 @@ public static class VTParser
     /// <summary>
     /// Parses input string into styled text segments.
     /// </summary>
-    private static List<TextSegment> ParseToSegments(string input)
-    {
+    private static List<TextSegment> ParseToSegments(string input) {
         var segments = new List<TextSegment>();
         ReadOnlySpan<char> span = input.AsSpan();
         var currentStyle = new StyleState();
         int textStart = 0;
         int i = 0;
 
-        while (i < span.Length)
-        {
-            if (span[i] == ESC && i + 1 < span.Length)
-            {
-                if (span[i + 1] == CSI_START)
-                {
+        while (i < span.Length) {
+            if (span[i] == ESC && i + 1 < span.Length) {
+                if (span[i + 1] == CSI_START) {
                     // Add text segment before escape sequence
-                    if (i > textStart)
-                    {
-                        string text = input.Substring(textStart, i - textStart);
+                    if (i > textStart) {
+                        string text = input[textStart..i];
                         segments.Add(new TextSegment(text, currentStyle.Clone()));
                     }
 
                     // Parse CSI escape sequence
                     int escapeEnd = ParseEscapeSequence(span, i, ref currentStyle);
-                    if (escapeEnd > i)
-                    {
+                    if (escapeEnd > i) {
                         i = escapeEnd;
                         textStart = i;
                     }
-                    else
-                    {
+                    else {
                         i++;
                     }
                 }
-                else if (span[i + 1] == OSC_START)
-                {
+                else if (span[i + 1] == OSC_START) {
                     // Add text segment before OSC sequence
-                    if (i > textStart)
-                    {
-                        string text = input.Substring(textStart, i - textStart);
+                    if (i > textStart) {
+                        string text = input[textStart..i];
                         segments.Add(new TextSegment(text, currentStyle.Clone()));
                     }
 
                     // Parse OSC sequence
                     OscResult oscResult = ParseOscSequence(span, i, ref currentStyle);
-                    if (oscResult.End > i)
-                    {
+                    if (oscResult.End > i) {
                         // If we found hyperlink text, add it as a segment
-                        if (!string.IsNullOrEmpty(oscResult.LinkText))
-                        {
+                        if (!string.IsNullOrEmpty(oscResult.LinkText)) {
                             segments.Add(new TextSegment(oscResult.LinkText, currentStyle.Clone()));
                         }
                         i = oscResult.End;
                         textStart = i;
                     }
-                    else
-                    {
+                    else {
                         i++;
                     }
                 }
-                else
-                {
+                else {
                     i++;
                 }
             }
-            else
-            {
+            else {
                 i++;
             }
         }
 
         // Add remaining text
-        if (textStart < span.Length)
-        {
-            string text = input.Substring(textStart);
+        if (textStart < span.Length) {
+            string text = input[textStart..];
             segments.Add(new TextSegment(text, currentStyle.Clone()));
         }
 
@@ -135,37 +115,31 @@ public static class VTParser
     /// Parses a single VT escape sequence and updates the style state.
     /// Returns the index after the escape sequence.
     /// </summary>
-    private static int ParseEscapeSequence(ReadOnlySpan<char> span, int start, ref StyleState style)
-    {
+    private static int ParseEscapeSequence(ReadOnlySpan<char> span, int start, ref StyleState style) {
         int i = start + 2; // Skip ESC[
         var parameters = new List<int>();
         int currentNumber = 0;
         bool hasNumber = false;
 
         // Parse parameters (numbers separated by semicolons)
-        while (i < span.Length && span[i] != SGR_END)
-        {
-            if (IsDigit(span[i]))
-            {
-                currentNumber = currentNumber * 10 + (span[i] - '0');
+        while (i < span.Length && span[i] != SGR_END) {
+            if (IsDigit(span[i])) {
+                currentNumber = (currentNumber * 10) + (span[i] - '0');
                 hasNumber = true;
             }
-            else if (span[i] == ';')
-            {
+            else if (span[i] == ';') {
                 parameters.Add(hasNumber ? currentNumber : 0);
                 currentNumber = 0;
                 hasNumber = false;
             }
-            else
-            {
+            else {
                 // Invalid character, abort parsing
                 return start + 1;
             }
             i++;
         }
 
-        if (i >= span.Length || span[i] != SGR_END)
-        {
+        if (i >= span.Length || span[i] != SGR_END) {
             return start + 1; // Invalid sequence
         }
 
@@ -181,64 +155,49 @@ public static class VTParser
     /// <summary>
     /// Result of parsing an OSC sequence.
     /// </summary>
-    private readonly struct OscResult
-    {
-        public readonly int End;
-        public readonly string? LinkText;
-
-        public OscResult(int end, string? linkText = null)
-        {
-            End = end;
-            LinkText = linkText;
-        }
+    private readonly struct OscResult(int end, string? linkText = null) {
+        public readonly int End = end;
+        public readonly string? LinkText = linkText;
     }
 
     /// <summary>
     /// Parses an OSC (Operating System Command) sequence and updates the style state.
     /// Returns the result containing end position and any link text found.
     /// </summary>
-    private static OscResult ParseOscSequence(ReadOnlySpan<char> span, int start, ref StyleState style)
-    {
+    private static OscResult ParseOscSequence(ReadOnlySpan<char> span, int start, ref StyleState style) {
         int i = start + 2; // Skip ESC]
 
         // Check if this is OSC 8 (hyperlink)
-        if (i < span.Length && span[i] == '8' && i + 1 < span.Length && span[i + 1] == ';')
-        {
+        if (i < span.Length && span[i] == '8' && i + 1 < span.Length && span[i + 1] == ';') {
             i += 2; // Skip "8;"
 
             // Parse hyperlink sequence: ESC]8;params;url ESC\text ESC]8;; ESC\
             int urlEnd = -1;
 
             // Find the semicolon that separates params from URL
-            while (i < span.Length && span[i] != ';')
-            {
+            while (i < span.Length && span[i] != ';') {
                 i++;
             }
 
-            if (i < span.Length && span[i] == ';')
-            {
+            if (i < span.Length && span[i] == ';') {
                 i++; // Skip the semicolon
                 int urlStart = i;
 
                 // Find the end of the URL (look for ESC\)
-                while (i < span.Length - 1)
-                {
-                    if (span[i] == ESC && span[i + 1] == '\\')
-                    {
+                while (i < span.Length - 1) {
+                    if (span[i] == ESC && span[i + 1] == '\\') {
                         urlEnd = i;
                         break;
                     }
                     i++;
                 }
 
-                if (urlEnd > urlStart)
-                {
-                    string url = span.Slice(urlStart, urlEnd - urlStart).ToString();
+                if (urlEnd > urlStart) {
+                    string url = span[urlStart..urlEnd].ToString();
                     i = urlEnd + 2; // Skip ESC\
 
                     // Check if this is a link start (has URL) or link end (empty)
-                    if (!string.IsNullOrEmpty(url))
-                    {
+                    if (!string.IsNullOrEmpty(url)) {
                         // This is a link start - find the link text and end sequence
                         int linkTextStart = i;
                         int linkTextEnd = -1;
@@ -249,23 +208,20 @@ public static class VTParser
                             if (span[i] == ESC && span[i + 1] == OSC_START &&
                                 span[i + 2] == '8' && span[i + 3] == ';' &&
                                 span[i + 4] == ';' && span[i + 5] == ESC &&
-                                span[i + 6] == '\\')
-                            {
+                                span[i + 6] == '\\') {
                                 linkTextEnd = i;
                                 break;
                             }
                             i++;
                         }
 
-                        if (linkTextEnd > linkTextStart)
-                        {
-                            string linkText = span.Slice(linkTextStart, linkTextEnd - linkTextStart).ToString();
+                        if (linkTextEnd > linkTextStart) {
+                            string linkText = span[linkTextStart..linkTextEnd].ToString();
                             style.Link = url;
                             return new OscResult(linkTextEnd + 7, linkText); // Skip ESC]8;;ESC\
                         }
                     }
-                    else
-                    {
+                    else {
                         // This is likely a link end sequence: ESC]8;;ESC\
                         style.Link = null;
                         return new OscResult(i);
@@ -275,10 +231,8 @@ public static class VTParser
         }
 
         // If we can't parse the OSC sequence, skip to the next ESC\ or end of string
-        while (i < span.Length - 1)
-        {
-            if (span[i] == ESC && span[i + 1] == '\\')
-            {
+        while (i < span.Length - 1) {
+            if (span[i] == ESC && span[i + 1] == '\\') {
                 return new OscResult(i + 2);
             }
             i++;
@@ -290,14 +244,11 @@ public static class VTParser
     /// <summary>
     /// Applies SGR (Select Graphic Rendition) parameters to the style state.
     /// </summary>
-    private static void ApplySgrParameters(List<int> parameters, ref StyleState style)
-    {
-        for (int i = 0; i < parameters.Count; i++)
-        {
+    private static void ApplySgrParameters(List<int> parameters, ref StyleState style) {
+        for (int i = 0; i < parameters.Count; i++) {
             int param = parameters[i];
 
-            switch (param)
-            {
+            switch (param) {
                 case 0: // Reset
                     style.Reset();
                     break;
@@ -353,8 +304,7 @@ public static class VTParser
                     style.Foreground = GetConsoleColor(param);
                     break;
                 case 38: // Extended foreground color
-                    if (i + 1 < parameters.Count)
-                    {
+                    if (i + 1 < parameters.Count) {
                         int colorType = parameters[i + 1];
                         if (colorType == 2 && i + 4 < parameters.Count) // RGB
                         {
@@ -379,8 +329,7 @@ public static class VTParser
                     style.Background = GetConsoleColor(param);
                     break;
                 case 48: // Extended background color
-                    if (i + 1 < parameters.Count)
-                    {
+                    if (i + 1 < parameters.Count) {
                         int colorType = parameters[i + 1];
                         if (colorType == 2 && i + 4 < parameters.Count) // RGB
                         {
@@ -407,6 +356,8 @@ public static class VTParser
                 case >= 100 and <= 107: // High intensity 3-bit background colors
                     style.Background = GetConsoleColor(param);
                     break;
+                default:
+                    break;
             }
         }
     }
@@ -415,8 +366,7 @@ public static class VTParser
     /// Gets a Color object for standard console colors.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Color GetConsoleColor(int code) => code switch
-    {
+    private static Color GetConsoleColor(int code) => code switch {
         // 30 or 40 => Color.Black,
         // 31 or 41 => Color.Red,
         // 32 or 42 => Color.Green,
@@ -474,16 +424,13 @@ public static class VTParser
     /// Gets a Color object for 256-color palette.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Color Get256Color(int index)
-    {
-        if (index < 0 || index > 255)
+    private static Color Get256Color(int index) {
+        if (index is < 0 or > 255)
             return Color.Default;
 
         // Standard 16 colors
-        if (index < 16)
-        {
-            return index switch
-            {
+        if (index < 16) {
+            return index switch {
                 0 => Color.Black,
                 1 => Color.Maroon,
                 2 => Color.Green,
@@ -505,17 +452,16 @@ public static class VTParser
         }
 
         // 216 color cube (16-231)
-        if (index < 232)
-        {
+        if (index < 232) {
             int colorIndex = index - 16;
-            byte r = (byte)((colorIndex / 36) * 51);
-            byte g = (byte)(((colorIndex % 36) / 6) * 51);
-            byte b = (byte)((colorIndex % 6) * 51);
+            byte r = (byte)(colorIndex / 36 * 51);
+            byte g = (byte)(colorIndex % 36 / 6 * 51);
+            byte b = (byte)(colorIndex % 6 * 51);
             return new Color(r, g, b);
         }
 
         // Grayscale (232-255)
-        byte gray = (byte)((index - 232) * 10 + 8);
+        byte gray = (byte)(((index - 232) * 10) + 8);
         return new Color(gray, gray, gray);
     }
 
@@ -528,25 +474,16 @@ public static class VTParser
     /// <summary>
     /// Represents a text segment with an associated style.
     /// </summary>
-    private readonly struct TextSegment
-    {
-        public readonly string Text;
-        public readonly StyleState Style;
-        public readonly bool HasStyle;
-
-        public TextSegment(string text, StyleState style)
-        {
-            Text = text;
-            Style = style;
-            HasStyle = style.HasAnyStyle;
-        }
+    private readonly struct TextSegment(string text, StyleState style) {
+        public readonly string Text = text;
+        public readonly StyleState Style = style;
+        public readonly bool HasStyle = style.HasAnyStyle;
     }
 
     /// <summary>
     /// Represents the current style state during parsing.
     /// </summary>
-    private struct StyleState
-    {
+    private struct StyleState {
         public Color? Foreground;
         public Color? Background;
         public Decoration Decoration;
@@ -554,37 +491,29 @@ public static class VTParser
 
         public readonly bool HasAnyStyle => Foreground.HasValue || Background.HasValue || Decoration != Decoration.None || !string.IsNullOrEmpty(Link);
 
-        public void Reset()
-        {
+        public void Reset() {
             Foreground = null;
             Background = null;
             Decoration = Decoration.None;
             Link = null;
         }
 
-        public readonly StyleState Clone() => new()
-        {
+        public readonly StyleState Clone() => new() {
             Foreground = Foreground,
             Background = Background,
             Decoration = Decoration,
             Link = Link
         };
 
-        public readonly Style ToSpectreStyle()
-        {
-            return new Style(Foreground, Background, Decoration, Link);
-        }
+        public readonly Style ToSpectreStyle() => new(Foreground, Background, Decoration, Link);
 
-        public readonly string ToMarkup()
-        {
+        public readonly string ToMarkup() {
             var parts = new List<string>();
 
-            if (Foreground.HasValue)
-            {
+            if (Foreground.HasValue) {
                 parts.Add(Foreground.Value.ToMarkup());
             }
-            else
-            {
+            else {
                 parts.Add("Default ");
 
             }
@@ -592,8 +521,7 @@ public static class VTParser
             if (Background.HasValue)
                 parts.Add($"on {Background.Value.ToMarkup()}");
 
-            if (Decoration != Decoration.None)
-            {
+            if (Decoration != Decoration.None) {
                 if ((Decoration & Decoration.Bold) != 0) parts.Add("bold");
                 if ((Decoration & Decoration.Dim) != 0) parts.Add("dim");
                 if ((Decoration & Decoration.Italic) != 0) parts.Add("italic");
@@ -605,8 +533,7 @@ public static class VTParser
                 if ((Decoration & Decoration.Conceal) != 0) parts.Add("conceal");
             }
 
-            if (!string.IsNullOrEmpty(Link))
-            {
+            if (!string.IsNullOrEmpty(Link)) {
                 parts.Add($"link={Link}");
             }
 

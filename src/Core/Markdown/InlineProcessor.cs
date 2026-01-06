@@ -1,7 +1,7 @@
 using System.Text;
 using Markdig.Syntax.Inlines;
-using PwshSpectreConsole.TextMate.Helpers;
 using PwshSpectreConsole.TextMate.Extensions;
+using PwshSpectreConsole.TextMate.Helpers;
 using Spectre.Console;
 using TextMateSharp.Themes;
 
@@ -10,22 +10,18 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown;
 /// <summary>
 /// Handles extraction and styling of inline markdown elements.
 /// </summary>
-internal static class InlineProcessor
-{
+internal static class InlineProcessor {
     /// <summary>
     /// Extracts and styles inline text from Markdig inline elements.
     /// </summary>
     /// <param name="container">Container holding inline elements</param>
     /// <param name="theme">Theme for styling</param>
     /// <param name="builder">StringBuilder to append results to</param>
-    public static void ExtractInlineText(ContainerInline? container, Theme theme, StringBuilder builder)
-    {
+    public static void ExtractInlineText(ContainerInline? container, Theme theme, StringBuilder builder) {
         if (container is null) return;
 
-        foreach (Inline inline in container)
-        {
-            switch (inline)
-            {
+        foreach (Inline inline in container) {
+            switch (inline) {
                 case LiteralInline literal:
                     ProcessLiteralInline(literal, builder);
                     break;
@@ -57,8 +53,7 @@ internal static class InlineProcessor
     /// <summary>
     /// Processes literal text inline elements.
     /// </summary>
-    private static void ProcessLiteralInline(LiteralInline literal, StringBuilder builder)
-    {
+    private static void ProcessLiteralInline(LiteralInline literal, StringBuilder builder) {
         ReadOnlySpan<char> span = literal.Content.Text.AsSpan(literal.Content.Start, literal.Content.Length);
         builder.Append(span);
     }
@@ -66,24 +61,19 @@ internal static class InlineProcessor
     /// <summary>
     /// Processes link and image inline elements.
     /// </summary>
-    private static void ProcessLinkInline(LinkInline link, Theme theme, StringBuilder builder)
-    {
-        if (!string.IsNullOrEmpty(link.Url))
-        {
+    private static void ProcessLinkInline(LinkInline link, Theme theme, StringBuilder builder) {
+        if (!string.IsNullOrEmpty(link.Url)) {
             var linkBuilder = new StringBuilder();
             ExtractInlineText(link, theme, linkBuilder);
 
-            if (link.IsImage)
-            {
+            if (link.IsImage) {
                 ProcessImageLink(linkBuilder.ToString(), link.Url, theme, builder);
             }
-            else
-            {
+            else {
                 builder.AppendLink(link.Url, linkBuilder.ToString());
             }
         }
-        else
-        {
+        else {
             ExtractInlineText(link, theme, builder);
         }
     }
@@ -91,22 +81,19 @@ internal static class InlineProcessor
     /// <summary>
     /// Processes image links with special styling.
     /// </summary>
-    private static void ProcessImageLink(string altText, string url, Theme theme, StringBuilder builder)
-    {
+    private static void ProcessImageLink(string altText, string url, Theme theme, StringBuilder builder) {
         // For now, render images as enhanced fallback since we can't easily make this async
         // In the future, this could be enhanced to support actual Sixel rendering
 
         // Check if the image format is likely supported
         bool isSupported = ImageFile.IsLikelySupportedImageFormat(url);
 
-        if (isSupported)
-        {
+        if (isSupported) {
             // Enhanced image representation for supported formats
             builder.Append("🖼️ ");
             builder.AppendLink(url, $"Image: {altText} (Sixel-ready)");
         }
-        else
-        {
+        else {
             // Basic image representation for unsupported formats
             builder.Append("🖼️ ");
             builder.AppendLink(url, $"Image: {altText}");
@@ -116,8 +103,7 @@ internal static class InlineProcessor
     /// <summary>
     /// Processes emphasis inline elements (bold, italic).
     /// </summary>
-    private static void ProcessEmphasisInline(EmphasisInline emph, Theme theme, StringBuilder builder)
-    {
+    private static void ProcessEmphasisInline(EmphasisInline emph, Theme theme, StringBuilder builder) {
         string[]? emphScopes = MarkdigTextMateScopeMapper.GetInlineScopes("Emphasis", emph.DelimiterCount);
         (int efg, int ebg, FontStyle efStyle) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(emphScopes), theme);
 
@@ -125,17 +111,15 @@ internal static class InlineProcessor
         ExtractInlineText(emph, theme, emphBuilder);
 
         // Apply the theme colors/style to the emphasis text
-        if (efg != -1 || ebg != -1 || efStyle != TextMateSharp.Themes.FontStyle.NotSet)
-        {
+        if (efg != -1 || ebg != -1 || efStyle != FontStyle.NotSet) {
             Color emphColor = efg != -1 ? StyleHelper.GetColor(efg, theme) : Color.Default;
             Color emphBgColor = ebg != -1 ? StyleHelper.GetColor(ebg, theme) : Color.Default;
             Decoration emphDecoration = StyleHelper.GetDecoration(efStyle);
 
-            Style? emphStyle = new Style(emphColor, emphBgColor, emphDecoration);
+            var emphStyle = new Style(emphColor, emphBgColor, emphDecoration);
             builder.AppendWithStyle(emphStyle, emphBuilder.ToString());
         }
-        else
-        {
+        else {
             builder.Append(emphBuilder);
         }
     }
@@ -143,14 +127,12 @@ internal static class InlineProcessor
     /// <summary>
     /// Processes inline code elements.
     /// </summary>
-    private static void ProcessCodeInline(CodeInline code, Theme theme, StringBuilder builder)
-    {
+    private static void ProcessCodeInline(CodeInline code, Theme theme, StringBuilder builder) {
         string[]? codeScopes = MarkdigTextMateScopeMapper.GetInlineScopes("CodeInline");
         (int cfg, int cbg, FontStyle cfStyle) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(codeScopes), theme);
 
         // Apply the theme colors/style to the inline code
-        if (cfg != -1 || cbg != -1 || cfStyle != TextMateSharp.Themes.FontStyle.NotSet)
-        {
+        if (cfg != -1 || cbg != -1 || cfStyle != FontStyle.NotSet) {
             Color codeColor = cfg != -1 ? StyleHelper.GetColor(cfg, theme) : Color.Default;
             Color codeBgColor = cbg != -1 ? StyleHelper.GetColor(cbg, theme) : Color.Default;
             Decoration codeDecoration = StyleHelper.GetDecoration(cfStyle);
@@ -158,8 +140,7 @@ internal static class InlineProcessor
             var codeStyle = new Style(codeColor, codeBgColor, codeDecoration);
             builder.AppendWithStyle(codeStyle, code.Content);
         }
-        else
-        {
+        else {
             builder.Append(code.Content.EscapeMarkup());
         }
     }

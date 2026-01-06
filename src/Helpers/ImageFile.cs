@@ -13,52 +13,43 @@ namespace PwshSpectreConsole.TextMate.Helpers;
 /// <summary>
 /// Normalizes various image sources (file paths, URLs, base64) into file paths that can be used by Spectre.Console.SixelImage.
 /// </summary>
-internal static class ImageFile
-{
+internal static partial class ImageFile {
     private static readonly HttpClient HttpClient = new();
-    private static readonly Regex Base64Regex = new(@"^data:image\/(?<type>[a-zA-Z]+);base64,(?<data>[A-Za-z0-9+/=]+)$", RegexOptions.Compiled);
+
+    [GeneratedRegex(@"^data:image\/(?<type>[a-zA-Z]+);base64,(?<data>[A-Za-z0-9+/=]+)$", RegexOptions.Compiled)]
+    private static partial Regex Base64Regex();
 
     /// <summary>
     /// Normalizes an image source to a local file path that can be used by SixelImage.
     /// </summary>
     /// <param name="imageSource">The image source (file path, URL, or base64 data URI)</param>
     /// <returns>A local file path, or null if the image cannot be processed</returns>
-    public static async Task<string?> NormalizeImageSourceAsync(string imageSource)
-    {
-        if (string.IsNullOrWhiteSpace(imageSource))
-        {
+    public static async Task<string?> NormalizeImageSourceAsync(string imageSource) {
+        if (string.IsNullOrWhiteSpace(imageSource)) {
             return null;
         }
 
         // Check if it's a base64 data URI
-        Match base64Match = Base64Regex.Match(imageSource);
-        if (base64Match.Success)
-        {
+        Match base64Match = Base64Regex().Match(imageSource);
+        if (base64Match.Success) {
             return await ConvertBase64ToFileAsync(base64Match.Groups["type"].Value, base64Match.Groups["data"].Value);
         }
 
         // Check if it's a URL
         if (Uri.TryCreate(imageSource, UriKind.Absolute, out Uri? uri) &&
-            (uri.Scheme == "http" || uri.Scheme == "https"))
-        {
+            (uri.Scheme == "http" || uri.Scheme == "https")) {
             return await DownloadImageToTempFileAsync(uri);
         }
 
         // Check if it's a local file path
-        if (File.Exists(imageSource))
-        {
+        if (File.Exists(imageSource)) {
             return imageSource;
         }
 
         // Try to resolve relative paths
         string currentDirectory = Environment.CurrentDirectory;
         string fullPath = Path.GetFullPath(Path.Combine(currentDirectory, imageSource));
-        if (File.Exists(fullPath))
-        {
-            return fullPath;
-        }
-
-        return null;
+        return File.Exists(fullPath) ? fullPath : null;
     }
 
     /// <summary>
@@ -67,35 +58,28 @@ internal static class ImageFile
     /// <param name="imageType">The image type (e.g., "png", "jpg")</param>
     /// <param name="base64Data">The base64 encoded image data</param>
     /// <returns>Path to the temporary file, or null if conversion fails</returns>
-    private static async Task<string?> ConvertBase64ToFileAsync(string imageType, string base64Data)
-    {
-        try
-        {
+    private static async Task<string?> ConvertBase64ToFileAsync(string imageType, string base64Data) {
+        try {
             byte[] imageBytes = Convert.FromBase64String(base64Data);
             string tempFileName = Path.Combine(Path.GetTempPath(), $"pstextmate_img_{Guid.NewGuid():N}.{imageType}");
 
             await File.WriteAllBytesAsync(tempFileName, imageBytes);
 
             // Schedule cleanup after a reasonable time (1 hour)
-            _ = Task.Delay(TimeSpan.FromHours(1)).ContinueWith(_ =>
-            {
-                try
-                {
-                    if (File.Exists(tempFileName))
-                    {
+            _ = Task.Delay(TimeSpan.FromHours(1)).ContinueWith(_ => {
+                try {
+                    if (File.Exists(tempFileName)) {
                         File.Delete(tempFileName);
                     }
                 }
-                catch
-                {
+                catch {
                     // Ignore cleanup errors
                 }
             });
 
             return tempFileName;
         }
-        catch
-        {
+        catch {
             return null;
         }
     }
@@ -105,13 +89,10 @@ internal static class ImageFile
     /// </summary>
     /// <param name="imageUri">The image URL</param>
     /// <returns>Path to the temporary file, or null if download fails</returns>
-    private static async Task<string?> DownloadImageToTempFileAsync(Uri imageUri)
-    {
-        try
-        {
+    private static async Task<string?> DownloadImageToTempFileAsync(Uri imageUri) {
+        try {
             using HttpResponseMessage response = await HttpClient.GetAsync(imageUri);
-            if (!response.IsSuccessStatusCode)
-            {
+            if (!response.IsSuccessStatusCode) {
                 return null;
             }
 
@@ -126,25 +107,20 @@ internal static class ImageFile
             await response.Content.CopyToAsync(fileStream);
 
             // Schedule cleanup after a reasonable time (1 hour)
-            _ = Task.Delay(TimeSpan.FromHours(1)).ContinueWith(_ =>
-            {
-                try
-                {
-                    if (File.Exists(tempFileName))
-                    {
+            _ = Task.Delay(TimeSpan.FromHours(1)).ContinueWith(_ => {
+                try {
+                    if (File.Exists(tempFileName)) {
                         File.Delete(tempFileName);
                     }
                 }
-                catch
-                {
+                catch {
                     // Ignore cleanup errors
                 }
             });
 
             return tempFileName;
         }
-        catch
-        {
+        catch {
             return null;
         }
     }
@@ -154,10 +130,8 @@ internal static class ImageFile
     /// </summary>
     /// <param name="contentType">The MIME content type</param>
     /// <returns>The appropriate file extension</returns>
-    private static string? GetExtensionFromContentType(string? contentType)
-    {
-        return contentType?.ToLowerInvariant() switch
-        {
+    private static string? GetExtensionFromContentType(string? contentType) {
+        return contentType?.ToLowerInvariant() switch {
             "image/jpeg" => ".jpg",
             "image/jpg" => ".jpg",
             "image/png" => ".png",
@@ -175,35 +149,30 @@ internal static class ImageFile
     /// </summary>
     /// <param name="imageSource">The image source to check</param>
     /// <returns>True if the image source is likely supported</returns>
-    public static bool IsLikelySupportedImageFormat(string imageSource)
-    {
-        if (string.IsNullOrWhiteSpace(imageSource))
-        {
+    public static bool IsLikelySupportedImageFormat(string imageSource) {
+        if (string.IsNullOrWhiteSpace(imageSource)) {
             return false;
         }
 
         // Check for supported extensions
         string extension = Path.GetExtension(imageSource).ToLowerInvariant();
-        string[] supportedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
+        string[] supportedExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"];
 
-        if (supportedExtensions.Contains(extension))
-        {
+        if (supportedExtensions.Contains(extension)) {
             return true;
         }
 
         // Check for base64 data URI with supported format
-        Match base64Match = Base64Regex.Match(imageSource);
-        if (base64Match.Success)
-        {
+        Match base64Match = Base64Regex().Match(imageSource);
+        if (base64Match.Success) {
             string imageType = base64Match.Groups["type"].Value.ToLowerInvariant();
-            string[] supportedTypes = new[] { "jpg", "jpeg", "png", "gif", "bmp", "webp" };
+            string[] supportedTypes = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
             return supportedTypes.Contains(imageType);
         }
 
         // For URLs, check the extension in the URL path
         if (Uri.TryCreate(imageSource, UriKind.Absolute, out Uri? uri) &&
-            (uri.Scheme == "http" || uri.Scheme == "https"))
-        {
+            (uri.Scheme == "http" || uri.Scheme == "https")) {
             string urlExtension = Path.GetExtension(uri.LocalPath).ToLowerInvariant();
             return supportedExtensions.Contains(urlExtension);
         }

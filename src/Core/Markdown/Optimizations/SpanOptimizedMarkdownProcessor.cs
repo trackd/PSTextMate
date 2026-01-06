@@ -7,34 +7,29 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Optimizations;
 /// Provides span-optimized operations for markdown validation and input processing.
 /// Reduces allocations during text analysis and validation operations.
 /// </summary>
-internal static class SpanOptimizedMarkdownProcessor
-{
+internal static class SpanOptimizedMarkdownProcessor {
     private static readonly SearchValues<char> LineBreakChars = SearchValues.Create(['\r', '\n']);
-    private static readonly SearchValues<char> WhitespaceChars = SearchValues.Create([' ', '\t', '\r', '\n']);
+    // private static readonly SearchValues<char> WhitespaceChars = SearchValues.Create([' ', '\t', '\r', '\n']);
 
     /// <summary>
     /// Counts lines in markdown text using span operations for better performance.
     /// </summary>
     /// <param name="markdown">Markdown text to analyze</param>
     /// <returns>Number of lines</returns>
-    public static int CountLinesOptimized(ReadOnlySpan<char> markdown)
-    {
+    public static int CountLinesOptimized(ReadOnlySpan<char> markdown) {
         if (markdown.IsEmpty) return 0;
 
         int lineCount = 1; // Start with 1 for the first line
         int index = 0;
 
-        while ((index = markdown[index..].IndexOfAny(LineBreakChars)) >= 0)
-        {
+        while ((index = markdown[index..].IndexOfAny(LineBreakChars)) >= 0) {
             // Handle CRLF as single line break
             if (index < markdown.Length - 1 &&
                 markdown[index] == '\r' &&
-                markdown[index + 1] == '\n')
-            {
+                markdown[index + 1] == '\n') {
                 index += 2;
             }
-            else
-            {
+            else {
                 index++;
             }
 
@@ -52,8 +47,7 @@ internal static class SpanOptimizedMarkdownProcessor
     /// </summary>
     /// <param name="markdown">Markdown text to split</param>
     /// <returns>Array of line strings</returns>
-    public static string[] SplitIntoLinesOptimized(ReadOnlySpan<char> markdown)
-    {
+    public static string[] SplitIntoLinesOptimized(ReadOnlySpan<char> markdown) {
         if (markdown.IsEmpty) return [];
 
         int lineCount = CountLinesOptimized(markdown);
@@ -61,12 +55,10 @@ internal static class SpanOptimizedMarkdownProcessor
         int lineIndex = 0;
         int start = 0;
 
-        for (int i = 0; i < markdown.Length; i++)
-        {
+        for (int i = 0; i < markdown.Length; i++) {
             bool isLineBreak = markdown[i] is '\r' or '\n';
 
-            if (isLineBreak)
-            {
+            if (isLineBreak) {
                 lines[lineIndex++] = markdown[start..i].ToString();
 
                 // Handle CRLF
@@ -89,22 +81,18 @@ internal static class SpanOptimizedMarkdownProcessor
     /// </summary>
     /// <param name="markdown">Markdown text to analyze</param>
     /// <returns>Maximum line length</returns>
-    public static int FindMaxLineLengthOptimized(ReadOnlySpan<char> markdown)
-    {
+    public static int FindMaxLineLengthOptimized(ReadOnlySpan<char> markdown) {
         if (markdown.IsEmpty) return 0;
 
         int maxLength = 0;
         int currentLength = 0;
 
-        foreach (char c in markdown)
-        {
-            if (c is '\r' or '\n')
-            {
+        foreach (char c in markdown) {
+            if (c is '\r' or '\n') {
                 maxLength = Math.Max(maxLength, currentLength);
                 currentLength = 0;
             }
-            else
-            {
+            else {
                 currentLength++;
             }
         }
@@ -118,14 +106,11 @@ internal static class SpanOptimizedMarkdownProcessor
     /// </summary>
     /// <param name="lines">Array of line strings</param>
     /// <returns>Array of trimmed lines</returns>
-    public static string[] TrimLinesOptimized(string[] lines)
-    {
+    public static string[] TrimLinesOptimized(string[] lines) {
         string[]? trimmedLines = new string[lines.Length];
 
-        for (int i = 0; i < lines.Length; i++)
-        {
-            if (string.IsNullOrEmpty(lines[i]))
-            {
+        for (int i = 0; i < lines.Length; i++) {
+            if (string.IsNullOrEmpty(lines[i])) {
                 trimmedLines[i] = string.Empty;
                 continue;
             }
@@ -143,8 +128,7 @@ internal static class SpanOptimizedMarkdownProcessor
     /// <param name="lines">Lines to join</param>
     /// <param name="lineEnding">Line ending to use (default: \n)</param>
     /// <returns>Joined markdown text</returns>
-    public static string JoinLinesOptimized(ReadOnlySpan<string> lines, ReadOnlySpan<char> lineEnding = default)
-    {
+    public static string JoinLinesOptimized(ReadOnlySpan<string> lines, ReadOnlySpan<char> lineEnding = default) {
         if (lines.IsEmpty) return string.Empty;
         if (lines.Length == 1) return lines[0] ?? string.Empty;
 
@@ -157,8 +141,7 @@ internal static class SpanOptimizedMarkdownProcessor
 
         var builder = new StringBuilder(totalLength);
 
-        for (int i = 0; i < lines.Length; i++)
-        {
+        for (int i = 0; i < lines.Length; i++) {
             if (i > 0) builder.Append(ending);
             if (lines[i] is not null)
                 builder.Append(lines[i].AsSpan());
@@ -172,12 +155,10 @@ internal static class SpanOptimizedMarkdownProcessor
     /// </summary>
     /// <param name="lines">Lines to filter</param>
     /// <returns>Array with empty lines removed</returns>
-    public static string[] RemoveEmptyLinesOptimized(string[] lines)
-    {
+    public static string[] RemoveEmptyLinesOptimized(string[] lines) {
         // First pass: count non-empty lines
         int nonEmptyCount = 0;
-        foreach (string line in lines)
-        {
+        foreach (string line in lines) {
             if (!string.IsNullOrEmpty(line) && !line.AsSpan().Trim().IsEmpty)
                 nonEmptyCount++;
         }
@@ -189,8 +170,7 @@ internal static class SpanOptimizedMarkdownProcessor
         string[]? result = new string[nonEmptyCount];
         int index = 0;
 
-        foreach (string line in lines)
-        {
+        foreach (string line in lines) {
             if (!string.IsNullOrEmpty(line) && !line.AsSpan().Trim().IsEmpty)
                 result[index++] = line;
         }
@@ -204,15 +184,13 @@ internal static class SpanOptimizedMarkdownProcessor
     /// <param name="markdown">Markdown text to analyze</param>
     /// <param name="targetChar">Character to count</param>
     /// <returns>Number of occurrences</returns>
-    public static int CountCharacterOptimized(ReadOnlySpan<char> markdown, char targetChar)
-    {
+    public static int CountCharacterOptimized(ReadOnlySpan<char> markdown, char targetChar) {
         if (markdown.IsEmpty) return 0;
 
         int count = 0;
         int index = 0;
 
-        while ((index = markdown[index..].IndexOf(targetChar)) >= 0)
-        {
+        while ((index = markdown[index..].IndexOf(targetChar)) >= 0) {
             count++;
             index++;
             if (index >= markdown.Length) break;

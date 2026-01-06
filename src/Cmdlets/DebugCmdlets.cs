@@ -1,8 +1,8 @@
 using System.Management.Automation;
-using TextMateSharp.Grammars;
-using PwshSpectreConsole.TextMate.Extensions;
 using PwshSpectreConsole.TextMate.Core;
+using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console.Rendering;
+using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate.Cmdlets;
 
@@ -12,9 +12,8 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// </summary>
 [Cmdlet(VerbsDiagnostic.Debug, "TextMate", DefaultParameterSetName = "String")]
 [OutputType(typeof(Test.TextMateDebug))]
-public sealed class DebugTextMateCmdlet : PSCmdlet
-{
-    private readonly List<string> _inputObjectBuffer = new();
+public sealed class DebugTextMateCmdlet : PSCmdlet {
+    private readonly List<string> _inputObjectBuffer = [];
 
     /// <summary>
     /// String content to debug.
@@ -69,10 +68,8 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
     /// <summary>
     /// Processes each input record from the pipeline.
     /// </summary>
-    protected override void ProcessRecord()
-    {
-        if (ParameterSetName == "String" && InputObject is not null)
-        {
+    protected override void ProcessRecord() {
+        if (ParameterSetName == "String" && InputObject is not null) {
             _inputObjectBuffer.Add(InputObject);
         }
     }
@@ -80,25 +77,19 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
     /// <summary>
     /// Finalizes processing and outputs debug information.
     /// </summary>
-    protected override void EndProcessing()
-    {
-        try
-        {
-            if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0)
-            {
-                string[] strings = _inputObjectBuffer.ToArray();
-                if (strings.AllIsNullOrEmpty())
-                {
+    protected override void EndProcessing() {
+        try {
+            if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0) {
+                string[] strings = [.. _inputObjectBuffer];
+                if (strings.AllIsNullOrEmpty()) {
                     return;
                 }
                 Test.TextMateDebug[]? obj = Test.DebugTextMate(strings, Theme, Language);
                 WriteObject(obj, true);
             }
-            else if (ParameterSetName == "Path" && Path is not null)
-            {
+            else if (ParameterSetName == "Path" && Path is not null) {
                 FileInfo Filepath = new(GetUnresolvedProviderPathFromPSPath(Path));
-                if (!Filepath.Exists)
-                {
+                if (!Filepath.Exists) {
                     throw new FileNotFoundException("File not found", Filepath.FullName);
                 }
                 string ext = !string.IsNullOrEmpty(ExtensionOverride)
@@ -109,8 +100,7 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
                 WriteObject(obj, true);
             }
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             WriteError(new ErrorRecord(ex, "DebugTextMateError", ErrorCategory.InvalidOperation, null));
         }
     }
@@ -120,11 +110,10 @@ public sealed class DebugTextMateCmdlet : PSCmdlet
 /// Cmdlet for debugging individual TextMate tokens and their properties.
 /// Provides low-level token analysis for detailed syntax highlighting inspection.
 /// </summary>
-[OutputType(typeof(Core.TokenDebugInfo))]
+[OutputType(typeof(TokenDebugInfo))]
 [Cmdlet(VerbsDiagnostic.Debug, "TextMateTokens", DefaultParameterSetName = "String")]
-public sealed class DebugTextMateTokensCmdlet : PSCmdlet
-{
-    private readonly List<string> _inputObjectBuffer = new();
+public sealed class DebugTextMateTokensCmdlet : PSCmdlet {
+    private readonly List<string> _inputObjectBuffer = [];
 
     /// <summary>
     /// String content to analyze tokens from.
@@ -166,10 +155,8 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
     /// <summary>
     /// Processes each input record from the pipeline.
     /// </summary>
-    protected override void ProcessRecord()
-    {
-        if (ParameterSetName == "String" && InputObject is not null)
-        {
+    protected override void ProcessRecord() {
+        if (ParameterSetName == "String" && InputObject is not null) {
             _inputObjectBuffer.Add(InputObject);
         }
     }
@@ -177,25 +164,19 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
     /// <summary>
     /// Finalizes processing and outputs token debug information.
     /// </summary>
-    protected override void EndProcessing()
-    {
-        try
-        {
-            if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0)
-            {
+    protected override void EndProcessing() {
+        try {
+            if (ParameterSetName == "String" && _inputObjectBuffer.Count > 0) {
                 string[] strings = [.. _inputObjectBuffer];
-                if (strings.AllIsNullOrEmpty())
-                {
+                if (strings.AllIsNullOrEmpty()) {
                     return;
                 }
                 TokenDebugInfo[]? obj = Test.DebugTextMateTokens(strings, Theme, Language);
                 WriteObject(obj, true);
             }
-            else if (ParameterSetName == "Path" && Path is not null)
-            {
+            else if (ParameterSetName == "Path" && Path is not null) {
                 FileInfo Filepath = new(GetUnresolvedProviderPathFromPSPath(Path));
-                if (!Filepath.Exists)
-                {
+                if (!Filepath.Exists) {
                     throw new FileNotFoundException("File not found", Filepath.FullName);
                 }
                 string ext = !string.IsNullOrEmpty(ExtensionOverride)
@@ -206,8 +187,7 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
                 WriteObject(obj, true);
             }
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             WriteError(new ErrorRecord(ex, "DebugTextMateTokensError", ErrorCategory.InvalidOperation, null));
         }
     }
@@ -218,26 +198,21 @@ public sealed class DebugTextMateTokensCmdlet : PSCmdlet
 /// Provides diagnostic information about Sixel capabilities in the current environment.
 /// </summary>
 [Cmdlet(VerbsDiagnostic.Debug, "SixelSupport")]
-public sealed class DebugSixelSupportCmdlet : PSCmdlet
-{
+public sealed class DebugSixelSupportCmdlet : PSCmdlet {
     /// <summary>
     /// Processes the cmdlet and outputs Sixel support diagnostic information.
     /// </summary>
-    protected override void ProcessRecord()
-    {
-        try
-        {
-            var result = new
-            {
+    protected override void ProcessRecord() {
+        try {
+            var result = new {
                 SixelImageAvailable = Core.Markdown.Renderers.ImageRenderer.IsSixelImageAvailable(),
                 LastSixelError = Core.Markdown.Renderers.ImageRenderer.GetLastSixelError(),
                 LoadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
                     .Where(a => a.GetName().Name?.Contains("Spectre.Console") == true)
-                    .Select(a => new
-                    {
-                        Name = a.GetName().Name,
+                    .Select(a => new {
+                        a.GetName().Name,
                         Version = a.GetName().Version?.ToString(),
-                        Location = a.Location,
+                        a.Location,
                         SixelTypes = a.GetTypes()
                             .Where(t => t.Name.Contains("Sixel", StringComparison.OrdinalIgnoreCase))
                             .Select(t => t.FullName)
@@ -248,8 +223,7 @@ public sealed class DebugSixelSupportCmdlet : PSCmdlet
 
             WriteObject(result);
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             WriteError(new ErrorRecord(ex, "DebugSixelSupportError", ErrorCategory.InvalidOperation, null));
         }
     }
@@ -259,8 +233,7 @@ public sealed class DebugSixelSupportCmdlet : PSCmdlet
 /// Cmdlet for testing image rendering and debugging issues.
 /// </summary>
 [Cmdlet(VerbsDiagnostic.Test, "ImageRendering")]
-public sealed class TestImageRenderingCmdlet : PSCmdlet
-{
+public sealed class TestImageRenderingCmdlet : PSCmdlet {
     /// <summary>
     /// URL or path to image for rendering test.
     /// </summary>
@@ -276,16 +249,13 @@ public sealed class TestImageRenderingCmdlet : PSCmdlet
     /// <summary>
     /// Processes the cmdlet and tests image rendering.
     /// </summary>
-    protected override void ProcessRecord()
-    {
-        try
-        {
+    protected override void ProcessRecord() {
+        try {
             WriteVerbose($"Testing image rendering for: {ImageUrl}");
 
             IRenderable result = Core.Markdown.Renderers.ImageRenderer.RenderImage(AltText, ImageUrl);
 
-            var debugInfo = new
-            {
+            var debugInfo = new {
                 ImageUrl,
                 AltText,
                 ResultType = result.GetType().FullName,
@@ -298,8 +268,7 @@ public sealed class TestImageRenderingCmdlet : PSCmdlet
             WriteObject("Rendered result:");
             WriteObject(result);
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             WriteError(new ErrorRecord(ex, "TestImageRenderingError", ErrorCategory.InvalidOperation, ImageUrl));
         }
     }

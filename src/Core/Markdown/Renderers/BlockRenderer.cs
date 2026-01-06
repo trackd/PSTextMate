@@ -10,8 +10,7 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 /// Block renderer that uses Spectre.Console object building instead of markup strings.
 /// This eliminates VT escaping issues and improves performance by avoiding double-parsing.
 /// </summary>
-internal static class BlockRenderer
-{
+internal static class BlockRenderer {
     /// <summary>
     /// Routes block elements to their appropriate renderers.
     /// All renderers build Spectre.Console objects directly instead of markup strings.
@@ -20,10 +19,8 @@ internal static class BlockRenderer
     /// <param name="theme">Theme for styling</param>
     /// <param name="themeName">Theme name for TextMateProcessor</param>
     /// <returns>Rendered block as a Spectre.Console object, or null if unsupported</returns>
-    public static IRenderable? RenderBlock(Block block, Theme theme, ThemeName themeName)
-    {
-        return block switch
-        {
+    public static IRenderable? RenderBlock(Block block, Theme theme, ThemeName themeName) {
+        return block switch {
             // Use renderers that build Spectre.Console objects directly
             HeadingBlock heading => HeadingRenderer.Render(heading, theme),
             ParagraphBlock paragraph => ParagraphRenderer.Render(paragraph, theme),

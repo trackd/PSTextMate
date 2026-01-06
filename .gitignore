@@ -4,7 +4,7 @@ src/obj/*
 src/.vs/*
 Module/lib
 debug.md
-output/*
+[Oo]utput/
 */obj/*
 */bin/*
 .github/chatmodes/*

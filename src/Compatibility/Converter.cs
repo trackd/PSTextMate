@@ -4,12 +4,20 @@ using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate;
 
-public static class Converter
-{
-    public static Spectre.Console.Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false)
-    {
-        var rows = TextMateProcessor.ProcessLines(lines, themeName, grammarId, isExtension);
-        if (rows is null) return null;
-        return new Spectre.Console.Rows(rows.Renderables);
+/// <summary>
+///
+/// </summary>
+public static class Converter {
+    /// <summary>
+    ///
+    /// </summary>
+    /// <param name="lines"></param>
+    /// <param name="themeName"></param>
+    /// <param name="grammarId"></param>
+    /// <param name="isExtension"></param>
+    /// <returns></returns>
+    public static Spectre.Console.Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false) {
+        Core.Rows? rows = TextMateProcessor.ProcessLines(lines, themeName, grammarId, isExtension);
+        return rows is null ? null : new Spectre.Console.Rows(rows.Renderables);
     }
 }

@@ -12,8 +12,7 @@ namespace PwshSpectreConsole.TextMate.Core;
 /// Legacy string-based renderer was removed in favor of the object-based Markdig renderer for better performance
 /// and to eliminate VT escape sequence issues.
 /// </remarks>
-internal static class MarkdownRenderer
-{
+internal static class MarkdownRenderer {
     /// <summary>
     /// Renders Markdown content with special handling for links and enhanced formatting.
     /// </summary>
@@ -23,8 +22,7 @@ internal static class MarkdownRenderer
     /// <param name="themeName">Theme name for passing to Markdig renderer</param>
     /// <param name="debugCallback">Optional debug callback (not used by Markdig renderer)</param>
     /// <returns>Rendered rows with markdown syntax highlighting</returns>
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName, Action<TokenDebugInfo>? debugCallback)
-    {
+    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName, Action<TokenDebugInfo>? debugCallback) {
         string markdown = string.Join("\n", lines);
         return Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
     }

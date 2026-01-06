@@ -10,8 +10,7 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 /// Heading renderer that builds Spectre.Console objects directly instead of markup strings.
 /// This eliminates VT escaping issues and avoids double-parsing overhead.
 /// </summary>
-internal static class HeadingRenderer
-{
+internal static class HeadingRenderer {
     /// <summary>
     /// Renders a heading block by building Spectre.Console Text objects directly.
     /// This approach eliminates VT escaping issues and improves performance.
@@ -19,8 +18,7 @@ internal static class HeadingRenderer
     /// <param name="heading">The heading block to render</param>
     /// <param name="theme">Theme for styling</param>
     /// <returns>Rendered heading as a Text object with proper styling</returns>
-    public static IRenderable Render(HeadingBlock heading, Theme theme)
-    {
+    public static IRenderable Render(HeadingBlock heading, Theme theme) {
         // Extract heading text without building markup strings
         string headingText = ExtractHeadingText(heading);
 
@@ -38,32 +36,29 @@ internal static class HeadingRenderer
     /// <summary>
     /// Extracts plain text from heading inline elements without building markup.
     /// </summary>
-    private static string ExtractHeadingText(HeadingBlock heading)
-    {
+    private static string ExtractHeadingText(HeadingBlock heading) {
         if (heading.Inline is null)
             return "";
 
         var textBuilder = new System.Text.StringBuilder();
 
-        foreach (Inline inline in heading.Inline)
-        {
-            switch (inline)
-            {
-                case Markdig.Syntax.Inlines.LiteralInline literal:
+        foreach (Inline inline in heading.Inline) {
+            switch (inline) {
+                case LiteralInline literal:
                     textBuilder.Append(literal.Content.ToString());
                     break;
 
-                case Markdig.Syntax.Inlines.EmphasisInline emphasis:
+                case EmphasisInline emphasis:
                     // For headings, we'll just extract the text without emphasis styling
                     // since the heading style takes precedence
                     ExtractInlineTextRecursive(emphasis, textBuilder);
                     break;
 
-                case Markdig.Syntax.Inlines.CodeInline code:
+                case CodeInline code:
                     textBuilder.Append(code.Content);
                     break;
 
-                case Markdig.Syntax.Inlines.LinkInline link:
+                case LinkInline link:
                     // Extract link text, not the URL
                     ExtractInlineTextRecursive(link, textBuilder);
                     break;
@@ -80,26 +75,24 @@ internal static class HeadingRenderer
     /// <summary>
     /// Recursively extracts text from inline elements.
     /// </summary>
-    private static void ExtractInlineTextRecursive(Markdig.Syntax.Inlines.Inline inline, System.Text.StringBuilder builder)
-    {
-        switch (inline)
-        {
-            case Markdig.Syntax.Inlines.LiteralInline literal:
+    private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder) {
+        switch (inline) {
+            case LiteralInline literal:
                 builder.Append(literal.Content.ToString());
                 break;
 
-            case Markdig.Syntax.Inlines.ContainerInline container:
-                foreach (Inline child in container)
-                {
+            case ContainerInline container:
+                foreach (Inline child in container) {
                     ExtractInlineTextRecursive(child, builder);
                 }
                 break;
 
-            case Markdig.Syntax.Inlines.LeafInline leaf:
-                if (leaf is Markdig.Syntax.Inlines.CodeInline code)
-                {
+            case LeafInline leaf:
+                if (leaf is CodeInline code) {
                     builder.Append(code.Content);
                 }
+                break;
+            default:
                 break;
         }
     }
@@ -107,20 +100,17 @@ internal static class HeadingRenderer
     /// <summary>
     /// Creates appropriate styling for headings based on theme and level.
     /// </summary>
-    private static Style CreateHeadingStyle(int foreground, int background, TextMateSharp.Themes.FontStyle fontStyle, Theme theme, int level)
-    {
+    private static Style CreateHeadingStyle(int foreground, int background, FontStyle fontStyle, Theme theme, int level) {
         Color? foregroundColor = null;
         Color? backgroundColor = null;
         Decoration decoration = Decoration.None;
 
         // Apply theme colors if available
-        if (foreground != -1)
-        {
+        if (foreground != -1) {
             foregroundColor = StyleHelper.GetColor(foreground, theme);
         }
 
-        if (background != -1)
-        {
+        if (background != -1) {
             backgroundColor = StyleHelper.GetColor(background, theme);
         }
 
@@ -128,14 +118,10 @@ internal static class HeadingRenderer
         decoration = StyleHelper.GetDecoration(fontStyle);
 
         // Apply level-specific styling as fallbacks
-        if (foregroundColor is null)
-        {
-            foregroundColor = GetDefaultHeadingColor(level);
-        }
+        foregroundColor ??= GetDefaultHeadingColor(level);
 
         // Ensure headings are bold by default
-        if (decoration == Decoration.None)
-        {
+        if (decoration == Decoration.None) {
             decoration = Decoration.Bold;
         }
 
@@ -145,10 +131,8 @@ internal static class HeadingRenderer
     /// <summary>
     /// Gets default colors for heading levels when theme doesn't provide them.
     /// </summary>
-    private static Color GetDefaultHeadingColor(int level)
-    {
-        return level switch
-        {
+    private static Color GetDefaultHeadingColor(int level) {
+        return level switch {
             1 => Color.Red,
             2 => Color.Orange1,
             3 => Color.Yellow,

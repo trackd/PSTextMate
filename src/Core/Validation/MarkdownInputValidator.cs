@@ -8,8 +8,7 @@ namespace PwshSpectreConsole.TextMate.Core.Validation;
 /// Provides validation utilities for markdown input and rendering parameters.
 /// Helps prevent security issues and improves error handling.
 /// </summary>
-internal static partial class MarkdownInputValidator
-{
+internal static partial class MarkdownInputValidator {
     private const int MaxMarkdownLength = 1_000_000; // 1MB text limit
     private const int MaxLineCount = 10_000;
     private const int MaxLineLength = 50_000;
@@ -25,8 +24,7 @@ internal static partial class MarkdownInputValidator
     /// </summary>
     /// <param name="markdown">The markdown text to validate</param>
     /// <returns>Validation result with any errors</returns>
-    public static ValidationResult ValidateMarkdownInput(string? markdown)
-    {
+    public static ValidationResult ValidateMarkdownInput(string? markdown) {
         if (string.IsNullOrEmpty(markdown))
             return ValidationResult.Success!;
 
@@ -40,10 +38,8 @@ internal static partial class MarkdownInputValidator
         if (lines.Length > MaxLineCount)
             errors.Add($"Markdown content exceeds maximum line count of {MaxLineCount:N0}");
 
-        foreach (string line in lines)
-        {
-            if (line.Length > MaxLineLength)
-            {
+        foreach (string line in lines) {
+            if (line.Length > MaxLineLength) {
                 errors.Add($"Line exceeds maximum length of {MaxLineLength:N0} characters");
                 break;
             }
@@ -67,18 +63,14 @@ internal static partial class MarkdownInputValidator
     /// </summary>
     /// <param name="themeName">The theme name to validate</param>
     /// <returns>True if valid, false otherwise</returns>
-    public static bool IsValidThemeName(ThemeName themeName)
-    {
-        return Enum.IsDefined(typeof(ThemeName), themeName);
-    }
+    public static bool IsValidThemeName(ThemeName themeName) => Enum.IsDefined(typeof(ThemeName), themeName);
 
     /// <summary>
     /// Sanitizes URL input for link rendering.
     /// </summary>
     /// <param name="url">The URL to sanitize</param>
     /// <returns>Sanitized URL or null if dangerous</returns>
-    public static string? SanitizeUrl(string? url)
-    {
+    public static string? SanitizeUrl(string? url) {
         if (string.IsNullOrWhiteSpace(url))
             return null;
 
@@ -87,11 +79,10 @@ internal static partial class MarkdownInputValidator
             return null;
 
         // Basic URL validation
-        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) &&
-            !Uri.TryCreate(url, UriKind.Relative, out uri))
-            return null;
-
-        return url.Trim();
+        return !Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) &&
+            !Uri.TryCreate(url, UriKind.Relative, out uri)
+            ? null
+            : url.Trim();
     }
 
     /// <summary>
@@ -99,8 +90,7 @@ internal static partial class MarkdownInputValidator
     /// </summary>
     /// <param name="language">The language identifier</param>
     /// <returns>True if supported, false otherwise</returns>
-    public static bool IsValidLanguage(string? language)
-    {
+    public static bool IsValidLanguage(string? language) {
         if (string.IsNullOrWhiteSpace(language))
             return false;
 

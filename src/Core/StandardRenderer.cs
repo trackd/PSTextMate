@@ -1,9 +1,9 @@
 using System.Text;
+using PwshSpectreConsole.TextMate.Helpers;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
-using PwshSpectreConsole.TextMate.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core;
 
@@ -11,8 +11,7 @@ namespace PwshSpectreConsole.TextMate.Core;
 /// Provides optimized rendering for standard (non-Markdown) TextMate grammars.
 /// Implements object pooling and batch processing for better performance.
 /// </summary>
-internal static class StandardRenderer
-{
+internal static class StandardRenderer {
     /// <summary>
     /// Renders text lines using standard TextMate grammar processing.
     /// Uses object pooling and batch processing for optimal performance.
@@ -21,21 +20,15 @@ internal static class StandardRenderer
     /// <param name="theme">Theme to apply</param>
     /// <param name="grammar">Grammar for tokenization</param>
     /// <returns>Rendered rows with syntax highlighting</returns>
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar)
-    {
-        return Render(lines, theme, grammar, null);
-    }
+    public static Rows Render(string[] lines, Theme theme, IGrammar grammar) => Render(lines, theme, grammar, null);
 
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback)
-    {
-        var builder = StringBuilderPool.Rent();
+    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback) {
+        StringBuilder builder = StringBuilderPool.Rent();
         List<IRenderable> rows = new(lines.Length);
 
-        try
-        {
+        try {
             IStateStack? ruleStack = null;
-            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
-            {
+            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++) {
                 string line = lines[lineIndex];
                 ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
                 ruleStack = result.RuleStack;
@@ -47,16 +40,13 @@ internal static class StandardRenderer
 
             return new Rows([.. rows]);
         }
-        catch (ArgumentException ex)
-        {
+        catch (ArgumentException ex) {
             throw new InvalidOperationException($"Argument error during rendering: {ex.Message}", ex);
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             throw new InvalidOperationException($"Unexpected error during rendering: {ex.Message}", ex);
         }
-        finally
-        {
+        finally {
             StringBuilderPool.Return(builder);
         }
     }

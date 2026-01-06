@@ -6,8 +6,7 @@ namespace PwshSpectreConsole.TextMate.Extensions;
 /// Enhanced string manipulation methods optimized with Span operations.
 /// Provides significant performance improvements for text processing scenarios.
 /// </summary>
-public static class SpanOptimizedStringExtensions
-{
+public static class SpanOptimizedStringExtensions {
     /// <summary>
     /// Joins string arrays using span operations for better performance.
     /// Avoids multiple string allocations during concatenation.
@@ -15,8 +14,7 @@ public static class SpanOptimizedStringExtensions
     /// <param name="values">Array of strings to join</param>
     /// <param name="separator">Separator character</param>
     /// <returns>Joined string</returns>
-    public static string JoinOptimized(this string[] values, char separator)
-    {
+    public static string JoinOptimized(this string[] values, char separator) {
         if (values.Length == 0) return string.Empty;
         if (values.Length == 1) return values[0] ?? string.Empty;
 
@@ -27,8 +25,7 @@ public static class SpanOptimizedStringExtensions
 
         var builder = new StringBuilder(totalLength);
 
-        for (int i = 0; i < values.Length; i++)
-        {
+        for (int i = 0; i < values.Length; i++) {
             if (i > 0) builder.Append(separator);
             if (values[i] is not null)
                 builder.Append(values[i].AsSpan());
@@ -43,8 +40,7 @@ public static class SpanOptimizedStringExtensions
     /// <param name="values">Array of strings to join</param>
     /// <param name="separator">Separator string</param>
     /// <returns>Joined string</returns>
-    public static string JoinOptimized(this string[] values, string separator)
-    {
+    public static string JoinOptimized(this string[] values, string separator) {
         if (values.Length == 0) return string.Empty;
         if (values.Length == 1) return values[0] ?? string.Empty;
 
@@ -56,8 +52,7 @@ public static class SpanOptimizedStringExtensions
 
         var builder = new StringBuilder(totalLength);
 
-        for (int i = 0; i < values.Length; i++)
-        {
+        for (int i = 0; i < values.Length; i++) {
             if (i > 0 && separator is not null)
                 builder.Append(separator.AsSpan());
             if (values[i] is not null)
@@ -76,8 +71,7 @@ public static class SpanOptimizedStringExtensions
     /// <param name="options">String split options</param>
     /// <param name="maxSplits">Maximum expected number of splits for optimization</param>
     /// <returns>Array of split strings</returns>
-    public static string[] SplitOptimized(this string source, char[] separators, StringSplitOptions options = StringSplitOptions.None, int maxSplits = 16)
-    {
+    public static string[] SplitOptimized(this string source, char[] separators, StringSplitOptions options = StringSplitOptions.None, int maxSplits = 16) {
         if (string.IsNullOrEmpty(source))
             return [];
 
@@ -86,17 +80,14 @@ public static class SpanOptimizedStringExtensions
         var results = new List<string>(Math.Min(maxSplits, 64)); // Cap initial capacity
 
         int start = 0;
-        for (int i = 0; i <= sourceSpan.Length; i++)
-        {
+        for (int i = 0; i <= sourceSpan.Length; i++) {
             bool isSeparator = i < sourceSpan.Length && separators.Contains(sourceSpan[i]);
             bool isEnd = i == sourceSpan.Length;
 
-            if (isSeparator || isEnd)
-            {
+            if (isSeparator || isEnd) {
                 ReadOnlySpan<char> segment = sourceSpan[start..i];
 
-                if (options.HasFlag(StringSplitOptions.RemoveEmptyEntries) && segment.IsEmpty)
-                {
+                if (options.HasFlag(StringSplitOptions.RemoveEmptyEntries) && segment.IsEmpty) {
                     start = i + 1;
                     continue;
                 }
@@ -109,7 +100,7 @@ public static class SpanOptimizedStringExtensions
             }
         }
 
-        return results.ToArray();
+        return [.. results];
     }
 
     /// <summary>
@@ -118,8 +109,7 @@ public static class SpanOptimizedStringExtensions
     /// </summary>
     /// <param name="source">Source string to trim</param>
     /// <returns>Trimmed string</returns>
-    public static string TrimOptimized(this string source)
-    {
+    public static string TrimOptimized(this string source) {
         if (string.IsNullOrEmpty(source))
             return source ?? string.Empty;
 
@@ -133,13 +123,7 @@ public static class SpanOptimizedStringExtensions
     /// <param name="source">Source string to search</param>
     /// <param name="chars">Characters to search for</param>
     /// <returns>True if any character is found</returns>
-    public static bool ContainsAnyOptimized(this string source, ReadOnlySpan<char> chars)
-    {
-        if (string.IsNullOrEmpty(source) || chars.IsEmpty)
-            return false;
-
-        return source.AsSpan().IndexOfAny(chars) >= 0;
-    }
+    public static bool ContainsAnyOptimized(this string source, ReadOnlySpan<char> chars) => !string.IsNullOrEmpty(source) && !chars.IsEmpty && source.AsSpan().IndexOfAny(chars) >= 0;
 
     /// <summary>
     /// Replaces characters in a string using span operations for better performance.
@@ -148,8 +132,7 @@ public static class SpanOptimizedStringExtensions
     /// <param name="oldChar">Character to replace</param>
     /// <param name="newChar">Replacement character</param>
     /// <returns>String with replacements</returns>
-    public static string ReplaceOptimized(this string source, char oldChar, char newChar)
-    {
+    public static string ReplaceOptimized(this string source, char oldChar, char newChar) {
         if (string.IsNullOrEmpty(source))
             return source ?? string.Empty;
 
@@ -163,8 +146,7 @@ public static class SpanOptimizedStringExtensions
         var result = new StringBuilder(source.Length);
         int lastIndex = 0;
 
-        do
-        {
+        do {
             result.Append(sourceSpan[lastIndex..firstIndex]);
             result.Append(newChar);
             lastIndex = firstIndex + 1;

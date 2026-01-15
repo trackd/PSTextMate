@@ -123,7 +123,8 @@ public static class SpanOptimizedStringExtensions {
     /// <param name="source">Source string to search</param>
     /// <param name="chars">Characters to search for</param>
     /// <returns>True if any character is found</returns>
-    public static bool ContainsAnyOptimized(this string source, ReadOnlySpan<char> chars) => !string.IsNullOrEmpty(source) && !chars.IsEmpty && source.AsSpan().IndexOfAny(chars) >= 0;
+    public static bool ContainsAnyOptimized(this string source, ReadOnlySpan<char> chars)
+        => !string.IsNullOrEmpty(source) && !chars.IsEmpty && source.AsSpan().IndexOfAny(chars) >= 0;
 
     /// <summary>
     /// Replaces characters in a string using span operations for better performance.

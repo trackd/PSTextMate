@@ -1,4 +1,6 @@
 ﻿using Markdig;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -22,30 +24,49 @@ internal static class MarkdownRenderer {
     /// <returns>Array of renderables for Spectre.Console rendering</returns>
     public static IRenderable[] Render(string markdown, Theme theme, ThemeName themeName) {
         MarkdownPipeline? pipeline = CreateMarkdownPipeline();
-        Markdig.Syntax.MarkdownDocument? document = Markdig.Markdown.Parse(markdown, pipeline);
+        MarkdownDocument? document = Markdig.Markdown.Parse(markdown, pipeline);
 
         var rows = new List<IRenderable>();
-        bool lastWasContent = false;
+        Block? lastBlock = null;
 
         for (int i = 0; i < document.Count; i++) {
-            Markdig.Syntax.Block? block = document[i];
+            Block? block = document[i];
 
             // Use block renderer that builds Spectre.Console objects directly
             IRenderable? renderable = BlockRenderer.RenderBlock(block, theme, themeName);
 
             if (renderable is not null) {
-                // Add spacing before certain block types or when there was previous content
-                bool needsSpacing = ShouldAddSpacing(block, lastWasContent);
+                // Determine if spacing is needed before current block
+                // Add spacing when transitioning:
+                // - FROM visual (tables, images, code) TO non-visual (text, headings, lists)
+                // - FROM non-visual TO visual
+                // But NOT between two visual blocks (they have their own styling)
+                bool isCurrentVisual = HasVisualStyling(block);
+                bool isLastVisual = lastBlock is not null && HasVisualStyling(lastBlock);
+
+                bool needsSpacing = false;
+                if (lastBlock is not null) {
+                    // Visual to non-visual: add spacing after the visual element
+                    if (isLastVisual && !isCurrentVisual) {
+                        needsSpacing = true;
+                    }
+                    // Non-visual to visual: add spacing before the visual element
+                    else if (!isLastVisual && isCurrentVisual) {
+                        needsSpacing = true;
+                    }
+                    // Non-visual to non-visual: add spacing (paragraph to heading, etc)
+                    else if (!isLastVisual && !isCurrentVisual) {
+                        needsSpacing = true;
+                    }
+                    // Visual to visual: no spacing (they handle their own styling)
+                }
 
                 if (needsSpacing && rows.Count > 0) {
                     rows.Add(Text.Empty);
                 }
 
                 rows.Add(renderable);
-                lastWasContent = true;
-            }
-            else {
-                lastWasContent = false;
+                lastBlock = block;
             }
         }
 
@@ -68,16 +89,42 @@ internal static class MarkdownRenderer {
     }
 
     /// <summary>
-    /// Determines if spacing should be added before a block element.
+    /// Determines if a block element has visual styling/borders that provide separation.
+    /// These blocks don't need extra spacing as they're visually distinct.
     /// </summary>
-    /// <param name="block">The current block being rendered</param>
-    /// <param name="lastWasContent">Whether the previous element was content</param>
-    /// <returns>True if spacing should be added</returns>
-    private static bool ShouldAddSpacing(Markdig.Syntax.Block block, bool lastWasContent) {
-        return lastWasContent ||
-                block is Markdig.Syntax.HeadingBlock ||
-                block is Markdig.Syntax.FencedCodeBlock ||
-                block is Markdig.Extensions.Tables.Table ||
-                block is Markdig.Syntax.QuoteBlock;
+    private static bool HasVisualStyling(Block? block) {
+        return block is not null &&
+            (block is Markdig.Extensions.Tables.Table ||
+                block is FencedCodeBlock ||
+                block is CodeBlock ||
+                block is QuoteBlock ||
+                block is HtmlBlock ||
+                block is ThematicBreakBlock ||
+                (block is ParagraphBlock para && IsStandaloneImage(para)));
+    }
+
+    /// <summary>
+    /// Checks if a paragraph block contains only a single image (no other text).
+    /// </summary>
+    private static bool IsStandaloneImage(ParagraphBlock paragraph) {
+        if (paragraph.Inline is null) {
+            return false;
+        }
+
+        var inlines = paragraph.Inline.ToList();
+
+        // Single image case
+        if (inlines.Count == 1 && inlines[0] is LinkInline link && link.IsImage) {
+            return true;
+        }
+
+        // Filter out empty/whitespace literals
+        var nonWhitespace = inlines
+            .Where(i => i is not LineBreakInline && !(i is LiteralInline lit && string.IsNullOrWhiteSpace(lit.Content.ToString())))
+            .ToList();
+
+        return nonWhitespace.Count == 1
+            && nonWhitespace[0] is LinkInline imageLink
+            && imageLink.IsImage;
     }
 }

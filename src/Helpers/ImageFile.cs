@@ -50,7 +50,7 @@ internal static partial class ImageFile {
         // Try to resolve relative paths
         // Use provided baseDirectory or fall back to current directory
         string resolveBasePath = baseDirectory ?? Environment.CurrentDirectory;
-        string fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(resolveBasePath, imageSource));
+        string fullPath = Path.GetFullPath(Path.Combine(resolveBasePath, imageSource));
 
         // Debug: For troubleshooting, we can add logging here if needed
         // System.Diagnostics.Debug.WriteLine($"Resolving '{imageSource}' with base '{resolveBasePath}' -> '{fullPath}' (exists: {File.Exists(fullPath)})");
@@ -104,8 +104,8 @@ internal static partial class ImageFile {
 
             string? contentType = response.Content.Headers.ContentType?.MediaType;
             string extension = GetExtensionFromContentType(contentType) ??
-                           Path.GetExtension(imageUri.LocalPath) ??
-                           ".img";
+                            Path.GetExtension(imageUri.LocalPath) ??
+                            ".img";
 
             string tempFileName = Path.Combine(Path.GetTempPath(), $"pstextmate_img_{Guid.NewGuid():N}{extension}");
 

@@ -38,5 +38,6 @@ public static class StringExtensions {
     /// </summary>
     /// <param name="strings">Array of strings to check</param>
     /// <returns>True if all strings are null or empty, false otherwise</returns>
-    public static bool AllIsNullOrEmpty(this string[] strings) => strings.All(string.IsNullOrEmpty);
+    public static bool AllIsNullOrEmpty(this string[] strings)
+        => strings.All(string.IsNullOrEmpty);
 }

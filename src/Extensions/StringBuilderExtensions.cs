@@ -18,10 +18,10 @@ public static class StringBuilderExtensions {
     /// <returns>The same StringBuilder for method chaining</returns>
     public static StringBuilder AppendLink(this StringBuilder builder, string url, string text) {
         builder.Append("[link=")
-               .Append(url.EscapeMarkup())
-               .Append(']')
-               .Append(text.EscapeMarkup())
-               .Append("[/]");
+                .Append(url.EscapeMarkup())
+                .Append(']')
+                .Append(text.EscapeMarkup())
+                .Append("[/]");
         return builder;
     }
     /// <summary>
@@ -31,7 +31,8 @@ public static class StringBuilderExtensions {
     /// <param name="style">Optional style to apply</param>
     /// <param name="value">Nullable integer to append</param>
     /// <returns>The same StringBuilder for method chaining</returns>
-    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, int? value) => AppendWithStyle(builder, style, value?.ToString(CultureInfo.InvariantCulture));
+    public static StringBuilder AppendWithStyle(this StringBuilder builder, Style? style, int? value)
+        => AppendWithStyle(builder, style, value?.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Appends a string value with optional style markup, escaping special characters.

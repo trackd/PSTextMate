@@ -1,5 +1,4 @@
 using System.Management.Automation;
-using PwshSpectreConsole.TextMate;
 using PwshSpectreConsole.TextMate.Core;
 using PwshSpectreConsole.TextMate.Extensions;
 using Spectre.Console.Rendering;
@@ -16,6 +15,8 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 [OutputType(typeof(HighlightedText))]
 public sealed class ShowTextMateCmdlet : PSCmdlet {
     private readonly List<string> _inputObjectBuffer = [];
+    private string? _sourceExtensionHint;
+    private string? _sourceBaseDirectory;
 
     /// <summary>
     /// String content to render with syntax highlighting.
@@ -26,7 +27,8 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         ParameterSetName = "String"
     )]
     [AllowEmptyString]
-    public string InputObject { get; set; } = string.Empty;
+    [AllowNull]
+    public string? InputObject { get; set; }
 
     /// <summary>
     /// Path to file to render with syntax highlighting.
@@ -39,39 +41,26 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     )]
     [ValidateNotNullOrEmpty]
     [Alias("FullName")]
-    public string Path { get; set; } = string.Empty;
+    public string? Path { get; set; }
 
     /// <summary>
     /// TextMate language ID for syntax highlighting (e.g., 'powershell', 'csharp', 'python').
     /// If not specified, detected from file extension (for files) or defaults to 'powershell' (for strings).
     /// </summary>
-    [Parameter(
-        ParameterSetName = "String"
-    )]
-    [Parameter(
-        ParameterSetName = "Path"
-    )]
+    [Parameter]
     [ArgumentCompleter(typeof(LanguageCompleter))]
     public string? Language { get; set; }
 
     /// <summary>
     /// Color theme to use for syntax highlighting.
     /// </summary>
-    [Parameter()]
-    public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
-
-    /// <summary>
-    /// Returns the rendered output object instead of writing directly to host.
-    /// </summary>
     [Parameter]
-    public SwitchParameter PassThru { get; set; }
+    public ThemeName Theme { get; set; } = ThemeName.DarkPlus;
 
     /// <summary>
     /// Enables streaming mode for large files, processing in batches.
     /// </summary>
-    [Parameter(
-        ParameterSetName = "Path"
-    )]
+    [Parameter(ParameterSetName = "Path")]
     public SwitchParameter Stream { get; set; }
 
     /// <summary>
@@ -84,13 +73,20 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     /// Processes each input record from the pipeline.
     /// </summary>
     protected override void ProcessRecord() {
+        WriteVerbose($"ParameterSet: {ParameterSetName}");
+
         if (ParameterSetName == "String" && InputObject is not null) {
-            // Simply buffer all strings - no complex detection logic
+            // Extract extension hint and base directory from PSPath if available
+            if (_sourceExtensionHint is null || _sourceBaseDirectory is null) {
+                GetSourceHint();
+            }
+
+            // Buffer the input string for later processing
             _inputObjectBuffer.Add(InputObject);
             return;
         }
 
-        if (ParameterSetName == "Path" && !string.IsNullOrWhiteSpace(Path)) {
+        if (ParameterSetName == "Path" && Path is not null) {
             try {
                 // Process file immediately when in Path parameter set
                 foreach (HighlightedText result in ProcessPathInput()) {
@@ -114,14 +110,15 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         }
 
         try {
+            if (_sourceExtensionHint is null || _sourceBaseDirectory is null) {
+                GetSourceHint();
+            }
             HighlightedText? result = ProcessStringInput();
             if (result is not null) {
                 // Output each renderable directly so pwshspectreconsole can format them
                 WriteObject(result.Renderables, enumerateCollection: true);
-                if (PassThru) {
-                    WriteVerbose($"Processed {_inputObjectBuffer.Count} line(s) with theme '{Theme}' {GetLanguageDescription()}");
-                }
             }
+
         }
         catch (Exception ex) {
             WriteError(new ErrorRecord(ex, "ShowTextMateCmdlet", ErrorCategory.NotSpecified, MyInvocation.BoundParameters));
@@ -142,8 +139,13 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
             return null;
         }
 
-        // Resolve language (explicit parameter or default)
-        string effectiveLanguage = Language ?? "powershell";
+        // Resolve language (explicit parameter, pipeline extension hint, or default)
+        string effectiveLanguage = !string.IsNullOrEmpty(Language) ? Language :
+            !string.IsNullOrEmpty(_sourceExtensionHint) ? _sourceExtensionHint :
+            "powershell";
+
+        WriteVerbose($"effectiveLanguage: {effectiveLanguage}");
+
         (string? token, bool asExtension) = TextMateResolver.ResolveToken(effectiveLanguage);
 
         // Process and wrap in HighlightedText
@@ -222,10 +224,33 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         // Single string with no newlines
         return [single];
     }
+    private void GetSourceHint() {
+        if (GetVariableValue("_") is not PSObject current) {
+            WriteVerbose("GetVariableValue failed to cast '_' to psobject");
+            return;
+        }
 
-    private string GetLanguageDescription() {
-        return string.IsNullOrWhiteSpace(Language)
-            ? "(language: default 'powershell')"
-            : $"(language: '{Language}')";
+        string? hint = current.Properties["PSPath"]?.Value as string
+                        ?? current.Properties["FullName"]?.Value as string;
+        if (string.IsNullOrEmpty(hint)) {
+            WriteVerbose($"hint empty?, {current}");
+            return;
+        }
+        if (_sourceExtensionHint is null) {
+            string ext = System.IO.Path.GetExtension(hint);
+            if (!string.IsNullOrWhiteSpace(ext)) {
+                _sourceExtensionHint = ext;
+                WriteVerbose($"Detected extension hint from PSPath: {ext}");
+            }
+        }
+
+        if (_sourceBaseDirectory is null) {
+            string? baseDir = System.IO.Path.GetDirectoryName(hint);
+            if (!string.IsNullOrWhiteSpace(baseDir)) {
+                _sourceBaseDirectory = baseDir;
+                Core.Markdown.Renderers.ImageRenderer.CurrentMarkdownDirectory = baseDir;
+                WriteVerbose($"Set markdown base directory from PSPath: {baseDir}");
+            }
+        }
     }
 }

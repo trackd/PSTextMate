@@ -8,6 +8,7 @@ using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
+using PwshSpectreConsole.TextMate.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -39,11 +40,20 @@ internal static partial class ParagraphRenderer {
     /// <summary>
     /// Processes inline elements and adds them directly to the Paragraph with appropriate styling.
     /// </summary>
-    internal static void ProcessInlineElements(Paragraph paragraph, ContainerInline inlines, Theme theme) {
+    /// <param name="paragraph">Target Spectre paragraph to append to</param>
+    /// <param name="inlines">Markdig inline container</param>
+    /// <param name="theme">Theme for styling</param>
+    /// <param name="skipLineBreaks">If true, skips LineBreakInline (used for list items where Rows handles spacing)</param>
+    internal static void ProcessInlineElements(Paragraph paragraph, ContainerInline inlines, Theme theme, bool skipLineBreaks = false) {
         foreach (Inline inline in inlines) {
+            // Console.WriteLine($"Inline: {inline}");
             switch (inline) {
                 case LiteralInline literal:
                     string literalText = literal.Content.ToString();
+                    // Skip empty literals to avoid extra blank lines
+                    if (string.IsNullOrEmpty(literalText)) {
+                        break;
+                    }
 
                     // Check for username patterns like @username
                     if (TryParseUsernameLinks(literalText, out TextSegment[]? segments)) {
@@ -88,7 +98,10 @@ internal static partial class ParagraphRenderer {
                     break;
 
                 case LineBreakInline:
-                    paragraph.Append("\n", Style.Plain);
+                    // Skip line breaks in lists (Rows handles spacing), but keep them in regular paragraphs
+                    if (!skipLineBreaks) {
+                        paragraph.Append("\n", Style.Plain);
+                    }
                     break;
 
                 case HtmlInline html:
@@ -328,9 +341,14 @@ internal static partial class ParagraphRenderer {
     /// Extracts plain text from inline elements without markup.
     /// </summary>
     private static string ExtractInlineText(Inline inline) {
-        var builder = new StringBuilder();
-        ExtractInlineTextRecursive(inline, builder);
-        return builder.ToString();
+        StringBuilder builder = StringBuilderPool.Rent();
+        try {
+            ExtractInlineTextRecursive(inline, builder);
+            return builder.ToString();
+        }
+        finally {
+            StringBuilderPool.Return(builder);
+        }
     }
 
     /// <summary>

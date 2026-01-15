@@ -14,7 +14,8 @@ internal static class StyleHelper {
     /// <param name="colorId">Color ID from theme</param>
     /// <param name="theme">Theme containing color definitions</param>
     /// <returns>Spectre Console Color instance</returns>
-    public static Color GetColor(int colorId, Theme theme) => colorId == -1 ? Color.Default : HexToColor(theme.GetColor(colorId));
+    public static Color GetColor(int colorId, Theme theme)
+        => colorId == -1 ? Color.Default : HexToColor(theme.GetColor(colorId));
 
     /// <summary>
     /// Converts TextMate font style to Spectre Console decoration.

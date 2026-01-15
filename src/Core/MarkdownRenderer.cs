@@ -24,7 +24,8 @@ internal static class MarkdownRenderer {
     /// <param name="debugCallback">Optional debug callback (not used by Markdig renderer)</param>
     /// <returns>Rendered rows with markdown syntax highlighting</returns>
     public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar, ThemeName themeName, Action<TokenDebugInfo>? debugCallback) {
-        string markdown = string.Join("\n", lines);
-        return Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
+        string markdown = string.Join('\n', lines);
+        IRenderable result = Markdown.MarkdownRenderer.Render(markdown, theme, themeName);
+        return [result];
     }
 }

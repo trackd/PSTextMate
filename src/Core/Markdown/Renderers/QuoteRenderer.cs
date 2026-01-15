@@ -3,6 +3,7 @@ using Markdig.Syntax;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Themes;
+using PwshSpectreConsole.TextMate.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -29,17 +30,32 @@ internal static class QuoteRenderer {
     /// </summary>
     private static string ExtractQuoteText(QuoteBlock quote, Theme theme) {
         string quoteText = string.Empty;
+        bool isFirstParagraph = true;
 
         foreach (Block subBlock in quote) {
             if (subBlock is ParagraphBlock para) {
-                var quoteBuilder = new StringBuilder();
-                InlineProcessor.ExtractInlineText(para.Inline, theme, quoteBuilder);
-                quoteText += quoteBuilder.ToString();
+                // Add newline between multiple paragraphs
+                if (!isFirstParagraph)
+                    quoteText += "\n";
+
+                StringBuilder quoteBuilder = StringBuilderPool.Rent();
+                try {
+                    InlineProcessor.ExtractInlineText(para.Inline, theme, quoteBuilder);
+                    quoteText += quoteBuilder.ToString();
+                }
+                finally {
+                    StringBuilderPool.Return(quoteBuilder);
+                }
+
+                isFirstParagraph = false;
             }
             else {
                 quoteText += subBlock.ToString();
             }
         }
+
+        // Trim trailing whitespace/newlines
+        quoteText = quoteText.TrimEnd();
 
         return quoteText;
     }

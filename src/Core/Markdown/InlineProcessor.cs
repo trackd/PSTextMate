@@ -63,14 +63,19 @@ internal static class InlineProcessor {
     /// </summary>
     private static void ProcessLinkInline(LinkInline link, Theme theme, StringBuilder builder) {
         if (!string.IsNullOrEmpty(link.Url)) {
-            var linkBuilder = new StringBuilder();
-            ExtractInlineText(link, theme, linkBuilder);
+            StringBuilder linkBuilder = StringBuilderPool.Rent();
+            try {
+                ExtractInlineText(link, theme, linkBuilder);
 
-            if (link.IsImage) {
-                ProcessImageLink(linkBuilder.ToString(), link.Url, theme, builder);
+                if (link.IsImage) {
+                    ProcessImageLink(linkBuilder.ToString(), link.Url, theme, builder);
+                }
+                else {
+                    builder.AppendLink(link.Url, linkBuilder.ToString());
+                }
             }
-            else {
-                builder.AppendLink(link.Url, linkBuilder.ToString());
+            finally {
+                StringBuilderPool.Return(linkBuilder);
             }
         }
         else {
@@ -107,20 +112,25 @@ internal static class InlineProcessor {
         string[]? emphScopes = MarkdigTextMateScopeMapper.GetInlineScopes("Emphasis", emph.DelimiterCount);
         (int efg, int ebg, FontStyle efStyle) = TokenProcessor.ExtractThemeProperties(new MarkdownToken(emphScopes), theme);
 
-        var emphBuilder = new StringBuilder();
-        ExtractInlineText(emph, theme, emphBuilder);
+        StringBuilder emphBuilder = StringBuilderPool.Rent();
+        try {
+            ExtractInlineText(emph, theme, emphBuilder);
 
-        // Apply the theme colors/style to the emphasis text
-        if (efg != -1 || ebg != -1 || efStyle != FontStyle.NotSet) {
-            Color emphColor = efg != -1 ? StyleHelper.GetColor(efg, theme) : Color.Default;
-            Color emphBgColor = ebg != -1 ? StyleHelper.GetColor(ebg, theme) : Color.Default;
-            Decoration emphDecoration = StyleHelper.GetDecoration(efStyle);
+            // Apply the theme colors/style to the emphasis text
+            if (efg != -1 || ebg != -1 || efStyle != FontStyle.NotSet) {
+                Color emphColor = efg != -1 ? StyleHelper.GetColor(efg, theme) : Color.Default;
+                Color emphBgColor = ebg != -1 ? StyleHelper.GetColor(ebg, theme) : Color.Default;
+                Decoration emphDecoration = StyleHelper.GetDecoration(efStyle);
 
-            var emphStyle = new Style(emphColor, emphBgColor, emphDecoration);
-            builder.AppendWithStyle(emphStyle, emphBuilder.ToString());
+                var emphStyle = new Style(emphColor, emphBgColor, emphDecoration);
+                builder.AppendWithStyle(emphStyle, emphBuilder.ToString());
+            }
+            else {
+                builder.Append(emphBuilder);
+            }
         }
-        else {
-            builder.Append(emphBuilder);
+        finally {
+            StringBuilderPool.Return(emphBuilder);
         }
     }
 

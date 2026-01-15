@@ -2,7 +2,9 @@
 using Markdig.Syntax.Inlines;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using System.Text;
 using TextMateSharp.Themes;
+using PwshSpectreConsole.TextMate.Helpers;
 
 namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 
@@ -30,7 +32,7 @@ internal static class HeadingRenderer {
         Style headingStyle = CreateHeadingStyle(hfg, hbg, hfs, theme, heading.Level);
 
         // Return Text object directly - no markup parsing needed
-        return new Text(headingText, headingStyle);
+        return new Rows(new Paragraph(headingText, headingStyle));
     }
 
     /// <summary>
@@ -40,42 +42,47 @@ internal static class HeadingRenderer {
         if (heading.Inline is null)
             return "";
 
-        var textBuilder = new System.Text.StringBuilder();
+        StringBuilder textBuilder = StringBuilderPool.Rent();
+        try {
 
-        foreach (Inline inline in heading.Inline) {
-            switch (inline) {
-                case LiteralInline literal:
-                    textBuilder.Append(literal.Content.ToString());
-                    break;
+            foreach (Inline inline in heading.Inline) {
+                switch (inline) {
+                    case LiteralInline literal:
+                        textBuilder.Append(literal.Content.ToString());
+                        break;
 
-                case EmphasisInline emphasis:
-                    // For headings, we'll just extract the text without emphasis styling
-                    // since the heading style takes precedence
-                    ExtractInlineTextRecursive(emphasis, textBuilder);
-                    break;
+                    case EmphasisInline emphasis:
+                        // For headings, we'll just extract the text without emphasis styling
+                        // since the heading style takes precedence
+                        ExtractInlineTextRecursive(emphasis, textBuilder);
+                        break;
 
-                case CodeInline code:
-                    textBuilder.Append(code.Content);
-                    break;
+                    case CodeInline code:
+                        textBuilder.Append(code.Content);
+                        break;
 
-                case LinkInline link:
-                    // Extract link text, not the URL
-                    ExtractInlineTextRecursive(link, textBuilder);
-                    break;
+                    case LinkInline link:
+                        // Extract link text, not the URL
+                        ExtractInlineTextRecursive(link, textBuilder);
+                        break;
 
-                default:
-                    ExtractInlineTextRecursive(inline, textBuilder);
-                    break;
+                    default:
+                        ExtractInlineTextRecursive(inline, textBuilder);
+                        break;
+                }
             }
-        }
 
-        return textBuilder.ToString();
+            return textBuilder.ToString();
+        }
+        finally {
+            StringBuilderPool.Return(textBuilder);
+        }
     }
 
     /// <summary>
     /// Recursively extracts text from inline elements.
     /// </summary>
-    private static void ExtractInlineTextRecursive(Inline inline, System.Text.StringBuilder builder) {
+    private static void ExtractInlineTextRecursive(Inline inline, StringBuilder builder) {
         switch (inline) {
             case LiteralInline literal:
                 builder.Append(literal.Content.ToString());
@@ -103,7 +110,6 @@ internal static class HeadingRenderer {
     private static Style CreateHeadingStyle(int foreground, int background, FontStyle fontStyle, Theme theme, int level) {
         Color? foregroundColor = null;
         Color? backgroundColor = null;
-        Decoration decoration = Decoration.None;
 
         // Apply theme colors if available
         if (foreground != -1) {
@@ -115,7 +121,7 @@ internal static class HeadingRenderer {
         }
 
         // Apply font style decorations
-        decoration = StyleHelper.GetDecoration(fontStyle);
+        Decoration decoration = StyleHelper.GetDecoration(fontStyle);
 
         // Apply level-specific styling as fallbacks
         foregroundColor ??= GetDefaultHeadingColor(level);

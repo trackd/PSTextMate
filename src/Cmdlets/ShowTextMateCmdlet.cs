@@ -10,7 +10,7 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// Cmdlet for displaying syntax-highlighted text using TextMate grammars.
 /// Supports both string input and file processing with theme customization.
 /// </summary>
-[Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
+[Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "Default")]
 [Alias("st", "Show-Code")]
 [OutputType(typeof(HighlightedText))]
 public sealed class ShowTextMateCmdlet : PSCmdlet {
@@ -24,24 +24,13 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     [Parameter(
         Mandatory = true,
         ValueFromPipeline = true,
-        ParameterSetName = "String"
+        ValueFromPipelineByPropertyName = true
     )]
     [AllowEmptyString]
     [AllowNull]
-    public string? InputObject { get; set; }
+    [Alias("FullName", "Path")]
 
-    /// <summary>
-    /// Path to file to render with syntax highlighting.
-    /// </summary>
-    [Parameter(
-        Mandatory = true,
-        ValueFromPipelineByPropertyName = true,
-        ParameterSetName = "Path",
-        Position = 0
-    )]
-    [ValidateNotNullOrEmpty]
-    [Alias("FullName")]
-    public string? Path { get; set; }
+    public PSObject? InputObject { get; set; }
 
     /// <summary>
     /// TextMate language ID for syntax highlighting (e.g., 'powershell', 'csharp', 'python').
@@ -60,42 +49,50 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     /// <summary>
     /// Enables streaming mode for large files, processing in batches.
     /// </summary>
-    [Parameter(ParameterSetName = "Path")]
+    [Parameter]
     public SwitchParameter Stream { get; set; }
 
     /// <summary>
     /// Number of lines to process per batch when streaming (default: 1000).
     /// </summary>
-    [Parameter(ParameterSetName = "Path")]
+    [Parameter]
     public int BatchSize { get; set; } = 1000;
 
     /// <summary>
     /// Processes each input record from the pipeline.
     /// </summary>
     protected override void ProcessRecord() {
-        WriteVerbose($"ParameterSet: {ParameterSetName}");
-
-        if (ParameterSetName == "String" && InputObject is not null) {
-            // Extract extension hint and base directory from PSPath if available
-            if (_sourceExtensionHint is null || _sourceBaseDirectory is null) {
-                GetSourceHint();
+        if (MyInvocation.ExpectingInput) {
+            if (InputObject?.BaseObject is FileInfo file) {
+                try {
+                    foreach (HighlightedText result in ProcessPathInput(file)) {
+                        WriteObject(result.Renderables, enumerateCollection: true);
+                    }
+                }
+                catch (Exception ex) {
+                    WriteError(new ErrorRecord(ex, "ShowTextMateCmdlet", ErrorCategory.NotSpecified, file));
+                }
             }
+            else if (InputObject?.BaseObject is string inputString) {
+                // Extract extension hint and base directory from PSPath if available
+                if (_sourceExtensionHint is null || _sourceBaseDirectory is null) {
+                    GetSourceHint();
+                }
 
-            // Buffer the input string for later processing
-            _inputObjectBuffer.Add(InputObject);
-            return;
+                // Buffer the input string for later processing
+                _inputObjectBuffer.Add(inputString);
+            }
         }
-
-        if (ParameterSetName == "Path" && Path is not null) {
+        else if (InputObject is not null) {
+            FileInfo file = new(GetUnresolvedProviderPathFromPSPath(InputObject?.ToString()));
+            if (!file.Exists) return;
             try {
-                // Process file immediately when in Path parameter set
-                foreach (HighlightedText result in ProcessPathInput()) {
-                    // Output each renderable directly so pwshspectreconsole can format them
+                foreach (HighlightedText result in ProcessPathInput(file)) {
                     WriteObject(result.Renderables, enumerateCollection: true);
                 }
             }
             catch (Exception ex) {
-                WriteError(new ErrorRecord(ex, "ShowTextMateCmdlet", ErrorCategory.NotSpecified, Path));
+                WriteError(new ErrorRecord(ex, "ShowTextMateCmdlet", ErrorCategory.NotSpecified, file));
             }
         }
     }
@@ -104,12 +101,12 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     /// Finalizes processing after all pipeline records have been processed.
     /// </summary>
     protected override void EndProcessing() {
-        // Only process buffered strings in EndProcessing
-        if (ParameterSetName != "String") {
-            return;
-        }
 
         try {
+            if (_inputObjectBuffer.Count == 0) {
+                // WriteVerbose("No string input provided");
+                return;
+            }
             if (_sourceExtensionHint is null || _sourceBaseDirectory is null) {
                 GetSourceHint();
             }
@@ -118,7 +115,6 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
                 // Output each renderable directly so pwshspectreconsole can format them
                 WriteObject(result.Renderables, enumerateCollection: true);
             }
-
         }
         catch (Exception ex) {
             WriteError(new ErrorRecord(ex, "ShowTextMateCmdlet", ErrorCategory.NotSpecified, MyInvocation.BoundParameters));
@@ -126,11 +122,6 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     }
 
     private HighlightedText? ProcessStringInput() {
-        if (_inputObjectBuffer.Count == 0) {
-            WriteVerbose("No input provided");
-            return null;
-        }
-
         // Normalize buffered strings into lines
         string[] lines = NormalizeToLines(_inputObjectBuffer);
 
@@ -158,8 +149,8 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
             };
     }
 
-    private IEnumerable<HighlightedText> ProcessPathInput() {
-        FileInfo filePath = new(GetUnresolvedProviderPathFromPSPath(Path));
+    private IEnumerable<HighlightedText> ProcessPathInput(FileInfo filePath) {
+        // FileInfo filePath = new(GetUnresolvedProviderPathFromPSPath(fileinfo));
 
         if (!filePath.Exists) {
             throw new FileNotFoundException($"File not found: {filePath.FullName}", filePath.FullName);
@@ -201,6 +192,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     }
 
     private static string[] NormalizeToLines(List<string> buffer) {
+
         if (buffer.Count == 0) {
             return [];
         }
@@ -211,9 +203,9 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         }
 
         // Single string - check if it contains newlines
-        string single = buffer[0];
+        string? single = buffer[0];
         if (string.IsNullOrEmpty(single)) {
-            return [single];
+            return single is not null ? [single] : [];
         }
 
         // Split on newlines if present
@@ -225,19 +217,16 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         return [single];
     }
     private void GetSourceHint() {
-        if (GetVariableValue("_") is not PSObject current) {
-            WriteVerbose("GetVariableValue failed to cast '_' to psobject");
-            return;
-        }
+        if (InputObject is null) return;
 
-        string? hint = current.Properties["PSPath"]?.Value as string
-                        ?? current.Properties["FullName"]?.Value as string;
-        if (string.IsNullOrEmpty(hint)) {
-            WriteVerbose($"hint empty?, {current}");
-            return;
-        }
+        string? hint = InputObject.Properties["PSPath"]?.Value as string
+                        ?? InputObject.Properties["FullName"]?.Value as string;
+        if (string.IsNullOrEmpty(hint)) return;
+
+        // remove potential Provider stuff from string.
+        hint = GetUnresolvedProviderPathFromPSPath(hint);
         if (_sourceExtensionHint is null) {
-            string ext = System.IO.Path.GetExtension(hint);
+            string ext = Path.GetExtension(hint);
             if (!string.IsNullOrWhiteSpace(ext)) {
                 _sourceExtensionHint = ext;
                 WriteVerbose($"Detected extension hint from PSPath: {ext}");
@@ -245,7 +234,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         }
 
         if (_sourceBaseDirectory is null) {
-            string? baseDir = System.IO.Path.GetDirectoryName(hint);
+            string? baseDir = Path.GetDirectoryName(hint);
             if (!string.IsNullOrWhiteSpace(baseDir)) {
                 _sourceBaseDirectory = baseDir;
                 Core.Markdown.Renderers.ImageRenderer.CurrentMarkdownDirectory = baseDir;

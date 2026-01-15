@@ -1,4 +1,7 @@
 ﻿using Markdig;
+using System;
+using System.IO;
+using Markdig.Helpers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
@@ -12,95 +15,129 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown;
 /// <summary>
 /// Markdown renderer that builds Spectre.Console objects directly instead of markup strings.
 /// This eliminates VT escaping issues and avoids double-parsing overhead for better performance.
+/// Supports both traditional switch-based rendering and visitor pattern for extensibility.
 /// </summary>
 internal static class MarkdownRenderer {
     /// <summary>
-    /// Renders markdown content using Spectre.Console object building.
-    /// This approach eliminates VT escaping issues and improves performance.
+    /// Renders markdown content using the visitor pattern with extensible renderer collection.
+    /// Allows third-party extensions to add custom block renderers.
+    /// Wraps all blocks in a Rows renderable to ensure proper spacing between them.
     /// </summary>
     /// <param name="markdown">Markdown text (can be multi-line)</param>
     /// <param name="theme">Theme object for styling</param>
     /// <param name="themeName">Theme name for TextMateProcessor</param>
-    /// <returns>Array of renderables for Spectre.Console rendering</returns>
-    public static IRenderable[] Render(string markdown, Theme theme, ThemeName themeName) {
-        MarkdownPipeline? pipeline = CreateMarkdownPipeline();
-        MarkdownDocument? document = Markdig.Markdown.Parse(markdown, pipeline);
+    /// <param name="rendererCollection">Optional custom renderer collection (uses default if null)</param>
+    /// <returns>Single Rows renderable containing all markdown blocks</returns>
+    public static IRenderable RenderWithVisitorPattern(
+        string markdown,
+        Theme theme,
+        ThemeName themeName,
+        MarkdownRendererCollection? rendererCollection = null) {
 
-        var rows = new List<IRenderable>();
-        Block? lastBlock = null;
+        // Use cached pipeline for better performance
+        MarkdownDocument? document = Markdig.Markdown.Parse(markdown, MarkdownPipelines.Standard);
+
+        // Create renderer collection if not provided
+        rendererCollection ??= new MarkdownRendererCollection(theme, themeName);
+
+        var blocks = new List<IRenderable>();
 
         for (int i = 0; i < document.Count; i++) {
             Block? block = document[i];
+
+            // Skip redundant paragraph that Markdig sometimes produces on the same line as a table
+            if (block is ParagraphBlock && i + 1 < document.Count) {
+                Block nextBlock = document[i + 1];
+                if (nextBlock is Markdig.Extensions.Tables.Table table && block.Line == table.Line) {
+                    continue;
+                }
+            }
+
+            // Use visitor pattern to dispatch to appropriate renderer
+            IRenderable? renderable = rendererCollection.Render(block);
+
+            if (renderable is not null) {
+                blocks.Add(renderable);
+            }
+        }
+
+        // Wrap all blocks in Rows to ensure proper line breaks between them
+        return new Rows([.. blocks]);
+    }
+
+    /// <summary>
+    /// Renders markdown content using Spectre.Console object building.
+    /// This approach eliminates VT escaping issues and improves performance.
+    /// Uses traditional switch-based dispatch for compatibility.
+    /// Wraps all blocks in a Rows renderable to ensure proper spacing between them.
+    /// </summary>
+    /// <param name="markdown">Markdown text (can be multi-line)</param>
+    /// <param name="theme">Theme object for styling</param>
+    /// <param name="themeName">Theme name for TextMateProcessor</param>
+    /// <returns>Single Rows renderable containing all markdown blocks with proper spacing</returns>
+    public static IRenderable Render(string markdown, Theme theme, ThemeName themeName) {
+        // Use cached pipeline for better performance
+        MarkdownDocument? document = Markdig.Markdown.Parse(markdown, MarkdownPipelines.Standard);
+
+        var blocks = new List<IRenderable>();
+        Block? previousBlock = null;
+
+        for (int i = 0; i < document.Count; i++) {
+            Block? block = document[i];
+
+            // Skip redundant paragraph that Markdig sometimes produces on the same line as a table
+            if (block is ParagraphBlock && i + 1 < document.Count) {
+                Block nextBlock = document[i + 1];
+                if (nextBlock is Markdig.Extensions.Tables.Table table && block.Line == table.Line) {
+                    continue;
+                }
+            }
 
             // Use block renderer that builds Spectre.Console objects directly
             IRenderable? renderable = BlockRenderer.RenderBlock(block, theme, themeName);
 
             if (renderable is not null) {
-                // Determine if spacing is needed before current block
-                // Add spacing when transitioning:
-                // - FROM visual (tables, images, code) TO non-visual (text, headings, lists)
-                // - FROM non-visual TO visual
-                // But NOT between two visual blocks (they have their own styling)
-                bool isCurrentVisual = HasVisualStyling(block);
-                bool isLastVisual = lastBlock is not null && HasVisualStyling(lastBlock);
+                // Preserve source gaps: add a single empty row when there is at least one blank line between blocks
+                if (previousBlock is not null) {
+                    int gapFromTrivia = block.LinesBefore?.Count ?? 0;
+                    int gapFromLines = block.Line - previousBlock.Line - 1;
+                    int gap = Math.Max(gapFromTrivia, gapFromLines);
 
-                bool needsSpacing = false;
-                if (lastBlock is not null) {
-                    // Visual to non-visual: add spacing after the visual element
-                    if (isLastVisual && !isCurrentVisual) {
-                        needsSpacing = true;
+                    if (gap > 0) {
+                        blocks.Add(Text.Empty);
                     }
-                    // Non-visual to visual: add spacing before the visual element
-                    else if (!isLastVisual && isCurrentVisual) {
-                        needsSpacing = true;
-                    }
-                    // Non-visual to non-visual: add spacing (paragraph to heading, etc)
-                    else if (!isLastVisual && !isCurrentVisual) {
-                        needsSpacing = true;
-                    }
-                    // Visual to visual: no spacing (they handle their own styling)
                 }
 
-                if (needsSpacing && rows.Count > 0) {
-                    rows.Add(Text.Empty);
-                }
+                blocks.Add(renderable);
+                previousBlock = block;
 
-                rows.Add(renderable);
-                lastBlock = block;
+                // Add extra spacing after standalone images (sixel images need breathing room)
+                if (block is ParagraphBlock para && IsStandaloneImage(para)) {
+                    blocks.Add(Text.Empty);
+                }
             }
         }
 
-        return [.. rows];
+        // Wrap all blocks in Rows to ensure proper line breaks between them
+        return new Rows([.. blocks]);
     }
 
     /// <summary>
-    /// Creates the Markdig pipeline with all necessary extensions enabled.
+    /// Determines how many empty lines preceded this block in the source markdown.
+    /// Uses Markdig's trivia tracking (LinesBefore) which is enabled in our pipeline.
     /// </summary>
-    /// <returns>Configured MarkdownPipeline</returns>
-    private static MarkdownPipeline CreateMarkdownPipeline() {
-        return new MarkdownPipelineBuilder()
-            .UseAdvancedExtensions()
-            .UsePipeTables()
-            .UseEmphasisExtras()
-            .UseAutoLinks()
-            .UseTaskLists()
-            .EnableTrackTrivia() // Enable HTML support
-            .Build();
-    }
+    private static int GetEmptyLinesBefore(Block block) {
+        // LinesBefore contains the empty lines that occurred before this block
+        // This is only populated when EnableTrackTrivia() is used in the pipeline
+        List<StringSlice>? linesBefore = block.LinesBefore;
 
-    /// <summary>
-    /// Determines if a block element has visual styling/borders that provide separation.
-    /// These blocks don't need extra spacing as they're visually distinct.
-    /// </summary>
-    private static bool HasVisualStyling(Block? block) {
-        return block is not null &&
-            (block is Markdig.Extensions.Tables.Table ||
-                block is FencedCodeBlock ||
-                block is CodeBlock ||
-                block is QuoteBlock ||
-                block is HtmlBlock ||
-                block is ThematicBreakBlock ||
-                (block is ParagraphBlock para && IsStandaloneImage(para)));
+        // Don't add spacing before the first block
+        if (block.Line == 1) {
+            return 0;
+        }
+
+        // If LinesBefore is populated, return the count (we'll add ONE Text.Empty per block)
+        return linesBefore?.Count ?? 0;
     }
 
     /// <summary>
@@ -111,6 +148,7 @@ internal static class MarkdownRenderer {
             return false;
         }
 
+        // Check if the paragraph contains only one LinkInline with IsImage = true
         var inlines = paragraph.Inline.ToList();
 
         // Single image case
@@ -118,13 +156,14 @@ internal static class MarkdownRenderer {
             return true;
         }
 
+        // Sometimes there might be whitespace inlines around the image
         // Filter out empty/whitespace literals
         var nonWhitespace = inlines
             .Where(i => i is not LineBreakInline && !(i is LiteralInline lit && string.IsNullOrWhiteSpace(lit.Content.ToString())))
             .ToList();
 
         return nonWhitespace.Count == 1
-            && nonWhitespace[0] is LinkInline imageLink
-            && imageLink.IsImage;
+                && nonWhitespace[0] is LinkInline imageLink
+                && imageLink.IsImage;
     }
 }

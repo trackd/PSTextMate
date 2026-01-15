@@ -13,7 +13,6 @@ public static class VTParser {
     private const char CSI_START = '[';
     private const char OSC_START = ']';
     private const char SGR_END = 'm';
-    private const char ST = '\x1B'; // String Terminator (ESC in this context)
 
     /// <summary>
     /// Parses a string containing VT escape sequences and returns a Paragraph object.
@@ -278,86 +277,108 @@ public static class VTParser {
             int param = parameters[i];
 
             switch (param) {
-                case 0: // Reset
+                case 0:
+                    // Reset
                     style.Reset();
                     break;
-                case 1: // Bold
+                case 1:
+                    // Bold
                     style.Decoration |= Decoration.Bold;
                     break;
-                case 2: // Dim
+                case 2:
+                    // Dim
                     style.Decoration |= Decoration.Dim;
                     break;
-                case 3: // Italic
+                case 3:
+                    // Italic
                     style.Decoration |= Decoration.Italic;
                     break;
-                case 4: // Underline
+                case 4:
+                    // Underline
                     style.Decoration |= Decoration.Underline;
                     break;
-                case 5: // Slow blink
+                case 5:
+                    // Slow blink
                     style.Decoration |= Decoration.SlowBlink;
                     break;
-                case 6: // Rapid blink
+                case 6:
+                    // Rapid blink
                     style.Decoration |= Decoration.RapidBlink;
                     break;
-                case 7: // Reverse video
+                case 7:
+                    // Reverse video
                     style.Decoration |= Decoration.Invert;
                     break;
-                case 8: // Conceal
+                case 8:
+                    // Conceal
                     style.Decoration |= Decoration.Conceal;
                     break;
-                case 9: // Strikethrough
+                case 9:
+                    // Strikethrough
                     style.Decoration |= Decoration.Strikethrough;
                     break;
-                case 22: // Normal intensity (not bold or dim)
+                case 22:
+                    // Normal intensity (not bold or dim)
                     style.Decoration &= ~(Decoration.Bold | Decoration.Dim);
                     break;
-                case 23: // Not italic
+                case 23:
+                    // Not italic
                     style.Decoration &= ~Decoration.Italic;
                     break;
-                case 24: // Not underlined
+                case 24:
+                    // Not underlined
                     style.Decoration &= ~Decoration.Underline;
                     break;
-                case 25: // Not blinking
+                case 25:
+                    // Not blinking
                     style.Decoration &= ~(Decoration.SlowBlink | Decoration.RapidBlink);
                     break;
-                case 27: // Not reversed
+                case 27:
+                    // Not reversed
                     style.Decoration &= ~Decoration.Invert;
                     break;
-                case 28: // Not concealed
+                case 28:
+                    // Not concealed
                     style.Decoration &= ~Decoration.Conceal;
                     break;
-                case 29: // Not strikethrough
+                case 29:
+                    // Not strikethrough
                     style.Decoration &= ~Decoration.Strikethrough;
                     break;
-                case >= 30 and <= 37: // 3-bit foreground colors
+                case >= 30 and <= 37:
+                    // 3-bit foreground colors
                     style.Foreground = GetConsoleColor(param);
                     break;
-                case 38: // Extended foreground color
+                case 38:
+                    // Extended foreground color
                     if (i + 1 < parameters.Length) {
                         int colorType = parameters[i + 1];
-                        if (colorType == 2 && i + 4 < parameters.Length) // RGB
-                        {
+                        if (colorType == 2 && i + 4 < parameters.Length) {
+                            // RGB
                             byte r = (byte)Math.Clamp(parameters[i + 2], 0, 255);
                             byte g = (byte)Math.Clamp(parameters[i + 3], 0, 255);
                             byte b = (byte)Math.Clamp(parameters[i + 4], 0, 255);
                             style.Foreground = new Color(r, g, b);
                             i += 4;
                         }
-                        else if (colorType == 5 && i + 2 < parameters.Length) // 256-color
-                        {
+                        else if (colorType == 5 && i + 2 < parameters.Length) {
+                            // 256-color
                             int colorIndex = parameters[i + 2];
                             style.Foreground = Get256Color(colorIndex);
                             i += 2;
                         }
                     }
                     break;
-                case 39: // Default foreground color
+                case 39:
+                    // Default foreground color
                     style.Foreground = null;
                     break;
-                case >= 40 and <= 47: // 3-bit background colors
+                case >= 40 and <= 47:
+                    // 3-bit background colors
                     style.Background = GetConsoleColor(param);
                     break;
-                case 48: // Extended background color
+                case 48:
+                    // Extended background color
                     if (i + 1 < parameters.Length) {
                         int colorType = parameters[i + 1];
                         if (colorType == 2 && i + 4 < parameters.Length) // RGB
@@ -376,13 +397,16 @@ public static class VTParser {
                         }
                     }
                     break;
-                case 49: // Default background color
+                case 49:
+                    // Default background color
                     style.Background = null;
                     break;
-                case >= 90 and <= 97: // High intensity 3-bit foreground colors
+                case >= 90 and <= 97:
+                    // High intensity 3-bit foreground colors
                     style.Foreground = GetConsoleColor(param);
                     break;
-                case >= 100 and <= 107: // High intensity 3-bit background colors
+                case >= 100 and <= 107:
+                    // High intensity 3-bit background colors
                     style.Background = GetConsoleColor(param);
                     break;
                 default:
@@ -394,8 +418,26 @@ public static class VTParser {
     /// <summary>
     /// Gets a Color object for standard console colors.
     /// </summary>
+    /// <param name="code"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Color GetConsoleColor(int code) => code switch {
+        30 or 40 => Color.Black,
+        31 or 41 => Color.DarkRed,
+        32 or 42 => Color.DarkGreen,
+        33 or 43 => Color.Olive,
+        34 or 44 => Color.DarkBlue,
+        35 or 45 => Color.Purple,
+        36 or 46 => Color.Teal,
+        37 or 47 => Color.Silver,
+        90 or 100 => Color.Grey,
+        91 or 101 => Color.Red,
+        92 or 102 => Color.Green,
+        93 or 103 => Color.Yellow,
+        94 or 104 => Color.Blue,
+        95 or 105 => Color.Fuchsia,
+        96 or 106 => Color.Aqua,
+        97 or 107 => Color.White,
+        _ => Color.Default
         // 30 or 40 => Color.Black,
         // 31 or 41 => Color.Red,
         // 32 or 42 => Color.Green,
@@ -414,39 +456,6 @@ public static class VTParser {
         // 97 or 107 => Color.White,
         // _ => Color.Default
         // From ConvertFrom-ConsoleColor.ps1
-        30 => Color.Black,
-        31 => Color.DarkRed,
-        32 => Color.DarkGreen,
-        33 => Color.Olive,
-        34 => Color.DarkBlue,
-        35 => Color.Purple,
-        36 => Color.Teal,
-        37 => Color.Silver,
-        40 => Color.Black,
-        41 => Color.DarkRed,
-        42 => Color.DarkGreen,
-        43 => Color.Olive,
-        44 => Color.DarkBlue,
-        45 => Color.Purple,
-        46 => Color.Teal,
-        47 => Color.Silver,
-        90 => Color.Grey,
-        91 => Color.Red,
-        92 => Color.Green,
-        93 => Color.Yellow,
-        94 => Color.Blue,
-        95 => Color.Fuchsia,
-        96 => Color.Aqua,
-        97 => Color.White,
-        100 => Color.Grey,
-        101 => Color.Red,
-        102 => Color.Green,
-        103 => Color.Yellow,
-        104 => Color.Blue,
-        105 => Color.Fuchsia,
-        106 => Color.Aqua,
-        107 => Color.White,
-        _ => Color.Default
     };
 
     /// <summary>

@@ -65,10 +65,9 @@ internal static class BlockRenderer {
             .Where(i => i is not LineBreakInline && !(i is LiteralInline lit && string.IsNullOrWhiteSpace(lit.Content.ToString())))
             .ToList();
 
-    bool result = nonWhitespace.Count == 1
-            && nonWhitespace[0] is LinkInline imageLink
-            && imageLink.IsImage;
-    return result;
+        return nonWhitespace.Count == 1
+                && nonWhitespace[0] is LinkInline imageLink
+                && imageLink.IsImage;
     }
 
     /// <summary>

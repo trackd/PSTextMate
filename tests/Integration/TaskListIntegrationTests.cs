@@ -37,8 +37,8 @@ public class TaskListIntegrationTests
         // Since we can't easily inspect the internal structure, we verify that:
         // 1. No exceptions are thrown (which would happen with reflection issues)
         // 2. The result is not null
-        // 3. The Renderables collection is not empty
-        result.Renderables.Should().NotBeEmpty();
+        // 3. The array is not empty
+        result.Should().NotBeEmpty();
 
         // In a real scenario, the TaskList items would be rendered with proper checkboxes
         // The fact that this doesn't throw proves the reflection code was successfully removed
@@ -59,7 +59,7 @@ public class TaskListIntegrationTests
         var result = MarkdownRenderer.Render(markdown, theme, themeName);
 
         result.Should().NotBeNull();
-        result.Renderables.Should().NotBeEmpty();
+        result.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -90,10 +90,10 @@ public class TaskListIntegrationTests
         var result = MarkdownRenderer.Render(markdown, theme, themeName);
 
         result.Should().NotBeNull();
-        result.Renderables.Should().NotBeEmpty();
+        result.Should().NotBeEmpty();
 
         // Verify we have multiple rendered elements (headings, lists, etc.)
-        result.Renderables.Should().HaveCountGreaterThan(3);
+        result.Should().HaveCountGreaterThan(3);
     }
 
     [Fact]
@@ -107,16 +107,17 @@ public class TaskListIntegrationTests
         try
         {
             // Act
-            var batches = TextMate.Core.TextMateProcessor.ProcessFileInBatches(temp, 1000, ThemeName.DarkPlus, ".cs", isExtension: true).ToList();
+            var batches = TextMate.Core.TextMateProcessor.ProcessFileInBatches(temp, 1000, ThemeName.DarkPlus, ".cs", isExtension: true);
+            var batchList = batches.ToList();
 
             // Assert
-            batches.Should().NotBeEmpty();
-            batches.Count.Should().BeGreaterThan(1);
+            batchList.Should().NotBeEmpty();
+            batchList.Count.Should().BeGreaterThan(1);
             // Offsets should increase and cover the whole file
-            long covered = batches.Sum(b => b.LineCount);
+            long covered = batchList.Sum(b => b.LineCount);
             covered.Should().BeGreaterOrEqualTo(lines.Length);
             // Batch indexes should be unique and sequential
-            batches.Select(b => b.BatchIndex).Should().BeInAscendingOrder();
+            batchList.Select(b => b.BatchIndex).Should().BeInAscendingOrder();
         }
         finally
         {

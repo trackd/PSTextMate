@@ -10,10 +10,16 @@ namespace PwshSpectreConsole.TextMate.Core.Markdown.Renderers;
 /// <summary>
 /// Handles rendering of images in markdown using Sixel format when possible.
 /// </summary>
-internal static class ImageRenderer {
+public static class ImageRenderer {
     private static string? _lastSixelError;
     private static string? _lastImageError;
     private static readonly TimeSpan ImageTimeout = TimeSpan.FromSeconds(5); // Increased to 5 seconds
+
+    /// <summary>
+    /// The base directory for resolving relative image paths in markdown.
+    /// Set this before rendering markdown content to enable relative path resolution.
+    /// </summary>
+    public static string? CurrentMarkdownDirectory { get; set; }
 
     /// <summary>
     /// Renders an image using Sixel format if possible, otherwise falls back to a link.
@@ -37,7 +43,14 @@ internal static class ImageRenderer {
 
             // Use a timeout for image processing
             string? localImagePath = null;
-            Task<string?> imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl));
+            Task<string?> imageTask = Task.Run(async () => {
+                string? result = await ImageFile.NormalizeImageSourceAsync(imageUrl, CurrentMarkdownDirectory);
+                // Track what paths we're trying to resolve for error reporting
+                if (result is null && CurrentMarkdownDirectory is not null) {
+                    _lastImageError = $"Failed to resolve '{imageUrl}' with base directory '{CurrentMarkdownDirectory}'";
+                }
+                return result;
+            });
 
             if (imageTask.Wait(ImageTimeout)) {
                 localImagePath = imageTask.Result;
@@ -102,7 +115,7 @@ internal static class ImageRenderer {
 
             // Use a timeout for image processing
             string? localImagePath = null;
-            Task<string?>? imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl));
+            Task<string?>? imageTask = Task.Run(async () => await ImageFile.NormalizeImageSourceAsync(imageUrl, CurrentMarkdownDirectory));
 
             if (imageTask.Wait(ImageTimeout)) {
                 localImagePath = imageTask.Result;
@@ -147,12 +160,11 @@ internal static class ImageRenderer {
 
         try {
             // Try multiple approaches to find SixelImage
-            Type? sixelImageType = null;
 
             // First, try the direct approach - SixelImage is in Spectre.Console namespace
             // but might be in different assemblies (Spectre.Console vs Spectre.Console.ImageSharp)
-            sixelImageType = Type.GetType("Spectre.Console.SixelImage, Spectre.Console.ImageSharp")
-                          ?? Type.GetType("Spectre.Console.SixelImage, Spectre.Console");
+            Type? sixelImageType = Type.GetType("Spectre.Console.SixelImage, Spectre.Console.ImageSharp")
+                            ?? Type.GetType("Spectre.Console.SixelImage, Spectre.Console");
 
             // If that fails, search through loaded assemblies
             if (sixelImageType is null) {
@@ -193,18 +205,28 @@ internal static class ImageRenderer {
             // Create SixelImage instance
             ConstructorInfo? constructor = sixelImageType.GetConstructor([typeof(string), typeof(bool)]);
             if (constructor is null) {
+                _lastSixelError = $"Constructor not found for SixelImage with (string, bool) parameters";
                 return false;
             }
 
-            object? sixelInstance = constructor.Invoke([imagePath, false]); // false = animation enabled
+            object? sixelInstance = null;
+            try {
+                sixelInstance = constructor.Invoke([imagePath, false]); // false = animation disabled
+            }
+            catch (Exception ex) {
+                _lastSixelError = $"Failed to invoke SixelImage constructor: {ex.InnerException?.Message ?? ex.Message}";
+                return false;
+            }
+
             if (sixelInstance is null) {
+                _lastSixelError = $"SixelImage constructor returned null";
                 return false;
             }
 
             // Apply size constraints if available
             if (maxWidth.HasValue) {
                 PropertyInfo? maxWidthProperty = sixelImageType.GetProperty("MaxWidth");
-                if (maxWidthProperty is not null && maxWidthProperty.CanWrite) {
+                if (maxWidthProperty?.CanWrite == true) {
                     maxWidthProperty.SetValue(sixelInstance, maxWidth.Value);
                 }
                 else {
@@ -292,28 +314,6 @@ internal static class ImageRenderer {
     }
 
     /// <summary>
-    /// Legacy async method for backward compatibility. Calls the synchronous RenderImage method.
-    /// </summary>
-    /// <param name="altText">Alternative text for the image</param>
-    /// <param name="imageUrl">URL or path to the image</param>
-    /// <param name="maxWidth">Maximum width for the image (optional)</param>
-    /// <param name="maxHeight">Maximum height for the image (optional)</param>
-    /// <returns>A renderable representing the image or fallback</returns>
-    [Obsolete("Use RenderImage instead")]
-    public static Task<IRenderable> RenderImageAsync(string altText, string imageUrl, int? maxWidth = null, int? maxHeight = null) => Task.FromResult(RenderImage(altText, imageUrl, maxWidth, maxHeight));
-
-    /// <summary>
-    /// Legacy async method for backward compatibility. Calls the synchronous RenderImageInline method.
-    /// </summary>
-    /// <param name="altText">Alternative text for the image</param>
-    /// <param name="imageUrl">URL or path to the image</param>
-    /// <param name="maxWidth">Maximum width for the image (optional)</param>
-    /// <param name="maxHeight">Maximum height for the image (optional)</param>
-    /// <returns>A renderable representing the image or fallback</returns>
-    [Obsolete("Use RenderImageInline instead")]
-    public static Task<IRenderable> RenderImageInlineAsync(string altText, string imageUrl, int? maxWidth = null, int? maxHeight = null) => Task.FromResult(RenderImageInline(altText, imageUrl, maxWidth, maxHeight));
-
-    /// <summary>
     /// Gets debug information about the last image processing error.
     /// </summary>
     /// <returns>The last error message, if any</returns>
@@ -331,11 +331,10 @@ internal static class ImageRenderer {
     /// <returns>True if SixelImage can be found</returns>
     public static bool IsSixelImageAvailable() {
         try {
-            Type? sixelImageType = null;
 
             // Try direct approaches first
-            sixelImageType = Type.GetType("Spectre.Console.SixelImage, Spectre.Console.ImageSharp")
-                          ?? Type.GetType("Spectre.Console.SixelImage, Spectre.Console");
+            Type? sixelImageType = Type.GetType("Spectre.Console.SixelImage, Spectre.Console.ImageSharp")
+                            ?? Type.GetType("Spectre.Console.SixelImage, Spectre.Console");
 
             if (sixelImageType is not null)
                 return true;

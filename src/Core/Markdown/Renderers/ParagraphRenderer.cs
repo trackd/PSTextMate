@@ -230,8 +230,43 @@ internal static partial class ParagraphRenderer {
 
     /// <summary>
     /// Processes link inline elements with clickable links using Spectre.Console Style with link parameter.
+    /// Also handles images (when IsImage is true) by delegating to ImageRenderer.
     /// </summary>
     private static void ProcessLinkInline(Paragraph paragraph, LinkInline link, Theme theme) {
+        // Check if this is an image (![alt](url) syntax)
+        if (link.IsImage) {
+            // Extract alt text from the link
+            string altText = ExtractInlineText(link);
+            if (string.IsNullOrEmpty(altText)) {
+                altText = "Image";
+            }
+
+            // Render the image using ImageRenderer (Sixel support)
+            IRenderable imageRenderable = ImageRenderer.RenderImageInline(altText, link.Url ?? "", maxWidth: null, maxHeight: null);
+
+            // Note: Can't directly append IRenderable to Paragraph, so we need to handle this differently
+            // For now, images inside paragraphs will use fallback link representation
+            // TODO: Consider restructuring to support embedded IRenderable in Paragraph
+            if (imageRenderable is Markup imageMarkup) {
+                // If it's a fallback Markup, we can append it
+                string markupText = imageMarkup.ToString() ?? "";
+                paragraph.Append(markupText, Style.Plain);
+            }
+            else {
+                // It's a SixelImage - can't embed in Paragraph inline
+                // Fall back to link representation
+                string imageLinkText = $"🖼️ {altText}";
+                var imageLinkStyle = new Style(
+                    foreground: Color.Blue,
+                    decoration: Decoration.Underline,
+                    link: link.Url
+                );
+                paragraph.Append(imageLinkText, imageLinkStyle);
+            }
+            return;
+        }
+
+        // Regular link handling
         // Use link text if available, otherwise use URL
         string linkText = ExtractInlineText(link);
         if (string.IsNullOrEmpty(linkText)) {

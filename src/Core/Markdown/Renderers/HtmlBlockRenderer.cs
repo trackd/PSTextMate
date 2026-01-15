@@ -22,10 +22,9 @@ internal static class HtmlBlockRenderer {
 
         // Try to render with HTML syntax highlighting
         try {
-            Rows? htmlRows = TextMateProcessor.ProcessLinesCodeBlock([.. htmlLines], themeName, "html", false);
-            if (htmlRows is not null) {
-                var spectreRows = new Spectre.Console.Rows(htmlRows.Renderables);
-                return new Panel(spectreRows)
+            IRenderable[]? htmlRenderables = TextMateProcessor.ProcessLinesCodeBlock([.. htmlLines], themeName, "html", false);
+            if (htmlRenderables is not null) {
+                return new Panel(new Rows(htmlRenderables))
                     .Border(BoxBorder.Rounded)
                     .Header("html", Justify.Left);
             }

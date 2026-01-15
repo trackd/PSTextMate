@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Text;
 using Spectre.Console;
 
 namespace PwshSpectreConsole.TextMate.Core.Helpers;
@@ -16,8 +17,9 @@ public static class VTParser {
 
     /// <summary>
     /// Parses a string containing VT escape sequences and returns a Paragraph object.
+    /// Optimized single-pass streaming implementation that avoids intermediate collections.
     /// This is more efficient than ToMarkup() as it directly constructs the Paragraph
-    /// without intermediate markup string generation and parsing.
+    /// without intermediate markup string generation, parsing, or segment collection.
     /// </summary>
     /// <param name="input">Input string with VT escape sequences</param>
     /// <returns>Paragraph object with parsed styles applied</returns>
@@ -25,29 +27,7 @@ public static class VTParser {
         if (string.IsNullOrEmpty(input))
             return new Paragraph();
 
-        List<TextSegment> segments = ParseToSegments(input);
-        if (segments.Count == 0)
-            return new Paragraph(input, Style.Plain);
-
         var paragraph = new Paragraph();
-        foreach (TextSegment segment in segments) {
-            if (segment.HasStyle) {
-                // Style class supports links directly via constructor parameter
-                paragraph.Append(segment.Text, segment.Style.ToSpectreStyle());
-            }
-            else {
-                paragraph.Append(segment.Text, Style.Plain);
-            }
-        }
-
-        return paragraph;
-    }
-
-    /// <summary>
-    /// Parses input string into styled text segments.
-    /// </summary>
-    private static List<TextSegment> ParseToSegments(string input) {
-        var segments = new List<TextSegment>();
         ReadOnlySpan<char> span = input.AsSpan();
         var currentStyle = new StyleState();
         int textStart = 0;
@@ -56,10 +36,15 @@ public static class VTParser {
         while (i < span.Length) {
             if (span[i] == ESC && i + 1 < span.Length) {
                 if (span[i + 1] == CSI_START) {
-                    // Add text segment before escape sequence
+                    // Append text segment before escape sequence
                     if (i > textStart) {
                         string text = input[textStart..i];
-                        segments.Add(new TextSegment(text, currentStyle.Clone()));
+                        if (currentStyle.HasAnyStyle) {
+                            paragraph.Append(text, currentStyle.ToSpectreStyle());
+                        }
+                        else {
+                            paragraph.Append(text, Style.Plain);
+                        }
                     }
 
                     // Parse CSI escape sequence
@@ -73,10 +58,15 @@ public static class VTParser {
                     }
                 }
                 else if (span[i + 1] == OSC_START) {
-                    // Add text segment before OSC sequence
+                    // Append text segment before OSC sequence
                     if (i > textStart) {
                         string text = input[textStart..i];
-                        segments.Add(new TextSegment(text, currentStyle.Clone()));
+                        if (currentStyle.HasAnyStyle) {
+                            paragraph.Append(text, currentStyle.ToSpectreStyle());
+                        }
+                        else {
+                            paragraph.Append(text, Style.Plain);
+                        }
                     }
 
                     // Parse OSC sequence
@@ -84,7 +74,12 @@ public static class VTParser {
                     if (oscResult.End > i) {
                         // If we found hyperlink text, add it as a segment
                         if (!string.IsNullOrEmpty(oscResult.LinkText)) {
-                            segments.Add(new TextSegment(oscResult.LinkText, currentStyle.Clone()));
+                            if (currentStyle.HasAnyStyle) {
+                                paragraph.Append(oscResult.LinkText, currentStyle.ToSpectreStyle());
+                            }
+                            else {
+                                paragraph.Append(oscResult.LinkText, Style.Plain);
+                            }
                         }
                         i = oscResult.End;
                         textStart = i;
@@ -102,33 +97,54 @@ public static class VTParser {
             }
         }
 
-        // Add remaining text
+        // Append remaining text
         if (textStart < span.Length) {
             string text = input[textStart..];
-            segments.Add(new TextSegment(text, currentStyle.Clone()));
+            if (currentStyle.HasAnyStyle) {
+                paragraph.Append(text, currentStyle.ToSpectreStyle());
+            }
+            else {
+                paragraph.Append(text, Style.Plain);
+            }
         }
 
-        return segments;
+        return paragraph;
     }
 
     /// <summary>
     /// Parses a single VT escape sequence and updates the style state.
+    /// Uses stack-allocated parameter array for efficient memory usage.
     /// Returns the index after the escape sequence.
     /// </summary>
     private static int ParseEscapeSequence(ReadOnlySpan<char> span, int start, ref StyleState style) {
         int i = start + 2; // Skip ESC[
-        var parameters = new List<int>();
+        const int MaxEscapeSequenceLength = 1024;
+
+        // Stack-allocate parameter array (SGR sequences typically have < 16 parameters)
+        Span<int> parameters = stackalloc int[16];
+        int paramCount = 0;
         int currentNumber = 0;
         bool hasNumber = false;
+        int escapeLength = 0;
 
-        // Parse parameters (numbers separated by semicolons)
-        while (i < span.Length && span[i] != SGR_END) {
+        // Parse parameters (numbers separated by semicolons or colons)
+        while (i < span.Length && span[i] != SGR_END && escapeLength < MaxEscapeSequenceLength) {
             if (IsDigit(span[i])) {
-                currentNumber = (currentNumber * 10) + (span[i] - '0');
+                // Overflow-safe parsing per XenoAtom pattern
+                int digit = span[i] - '0';
+                if (currentNumber > (int.MaxValue - digit) / 10) {
+                    currentNumber = int.MaxValue;  // Clamp instead of overflow
+                }
+                else {
+                    currentNumber = (currentNumber * 10) + digit;
+                }
                 hasNumber = true;
             }
-            else if (span[i] == ';') {
-                parameters.Add(hasNumber ? currentNumber : 0);
+            // Support both ; and : as separators (SGR uses : for hyperlinks)
+            else if (span[i] is ';' or ':') {
+                if (paramCount < parameters.Length) {
+                    parameters[paramCount++] = hasNumber ? currentNumber : 0;
+                }
                 currentNumber = 0;
                 hasNumber = false;
             }
@@ -137,17 +153,21 @@ public static class VTParser {
                 return start + 1;
             }
             i++;
+            escapeLength++;
         }
 
         if (i >= span.Length || span[i] != SGR_END) {
-            return start + 1; // Invalid sequence
+            // Invalid sequence
+            return start + 1;
         }
 
         // Add the last parameter
-        parameters.Add(hasNumber ? currentNumber : 0);
+        if (paramCount < parameters.Length) {
+            parameters[paramCount++] = hasNumber ? currentNumber : 0;
+        }
 
-        // Apply SGR parameters to style
-        ApplySgrParameters(parameters, ref style);
+        // Apply SGR parameters to style (using slice of actual parameters)
+        ApplySgrParameters(parameters[..paramCount], ref style);
 
         return i + 1; // Return position after 'm'
     }
@@ -163,9 +183,12 @@ public static class VTParser {
     /// <summary>
     /// Parses an OSC (Operating System Command) sequence and updates the style state.
     /// Returns the result containing end position and any link text found.
+    /// Safety limits prevent memory exhaustion from malformed sequences.
     /// </summary>
     private static OscResult ParseOscSequence(ReadOnlySpan<char> span, int start, ref StyleState style) {
         int i = start + 2; // Skip ESC]
+        const int MaxOscLength = 32768;
+        int oscLength = 0;
 
         // Check if this is OSC 8 (hyperlink)
         if (i < span.Length && span[i] == '8' && i + 1 < span.Length && span[i + 1] == ';') {
@@ -175,24 +198,27 @@ public static class VTParser {
             int urlEnd = -1;
 
             // Find the semicolon that separates params from URL
-            while (i < span.Length && span[i] != ';') {
+            while (i < span.Length && span[i] != ';' && oscLength < MaxOscLength) {
                 i++;
+                oscLength++;
             }
 
             if (i < span.Length && span[i] == ';') {
                 i++; // Skip the semicolon
+                oscLength++;
                 int urlStart = i;
 
                 // Find the end of the URL (look for ESC\)
-                while (i < span.Length - 1) {
+                while (i < span.Length - 1 && oscLength < MaxOscLength) {
                     if (span[i] == ESC && span[i + 1] == '\\') {
                         urlEnd = i;
                         break;
                     }
                     i++;
+                    oscLength++;
                 }
 
-                if (urlEnd > urlStart) {
+                if (urlEnd > urlStart && urlEnd - urlStart < MaxOscLength) {
                     string url = span[urlStart..urlEnd].ToString();
                     i = urlEnd + 2; // Skip ESC\
 
@@ -203,7 +229,7 @@ public static class VTParser {
                         int linkTextEnd = -1;
 
                         // Look for the closing OSC sequence: ESC]8;;ESC\
-                        while (i < span.Length - 6) // Need at least 6 chars for ESC]8;;ESC\
+                        while (i < span.Length - 6 && oscLength < MaxOscLength)  // Need at least 6 chars for ESC]8;;ESC\
                         {
                             if (span[i] == ESC && span[i + 1] == OSC_START &&
                                 span[i + 2] == '8' && span[i + 3] == ';' &&
@@ -213,6 +239,7 @@ public static class VTParser {
                                 break;
                             }
                             i++;
+                            oscLength++;
                         }
 
                         if (linkTextEnd > linkTextStart) {
@@ -231,11 +258,12 @@ public static class VTParser {
         }
 
         // If we can't parse the OSC sequence, skip to the next ESC\ or end of string
-        while (i < span.Length - 1) {
+        while (i < span.Length - 1 && oscLength < MaxOscLength) {
             if (span[i] == ESC && span[i + 1] == '\\') {
                 return new OscResult(i + 2);
             }
             i++;
+            oscLength++;
         }
 
         return new OscResult(start + 1); // Failed to parse, advance by 1
@@ -243,9 +271,10 @@ public static class VTParser {
 
     /// <summary>
     /// Applies SGR (Select Graphic Rendition) parameters to the style state.
+    /// Optimized to work with Span instead of List for zero-allocation processing.
     /// </summary>
-    private static void ApplySgrParameters(List<int> parameters, ref StyleState style) {
-        for (int i = 0; i < parameters.Count; i++) {
+    private static void ApplySgrParameters(ReadOnlySpan<int> parameters, ref StyleState style) {
+        for (int i = 0; i < parameters.Length; i++) {
             int param = parameters[i];
 
             switch (param) {
@@ -304,9 +333,9 @@ public static class VTParser {
                     style.Foreground = GetConsoleColor(param);
                     break;
                 case 38: // Extended foreground color
-                    if (i + 1 < parameters.Count) {
+                    if (i + 1 < parameters.Length) {
                         int colorType = parameters[i + 1];
-                        if (colorType == 2 && i + 4 < parameters.Count) // RGB
+                        if (colorType == 2 && i + 4 < parameters.Length) // RGB
                         {
                             byte r = (byte)Math.Clamp(parameters[i + 2], 0, 255);
                             byte g = (byte)Math.Clamp(parameters[i + 3], 0, 255);
@@ -314,7 +343,7 @@ public static class VTParser {
                             style.Foreground = new Color(r, g, b);
                             i += 4;
                         }
-                        else if (colorType == 5 && i + 2 < parameters.Count) // 256-color
+                        else if (colorType == 5 && i + 2 < parameters.Length) // 256-color
                         {
                             int colorIndex = parameters[i + 2];
                             style.Foreground = Get256Color(colorIndex);
@@ -329,9 +358,9 @@ public static class VTParser {
                     style.Background = GetConsoleColor(param);
                     break;
                 case 48: // Extended background color
-                    if (i + 1 < parameters.Count) {
+                    if (i + 1 < parameters.Length) {
                         int colorType = parameters[i + 1];
-                        if (colorType == 2 && i + 4 < parameters.Count) // RGB
+                        if (colorType == 2 && i + 4 < parameters.Length) // RGB
                         {
                             byte r = (byte)Math.Clamp(parameters[i + 2], 0, 255);
                             byte g = (byte)Math.Clamp(parameters[i + 3], 0, 255);
@@ -339,7 +368,7 @@ public static class VTParser {
                             style.Background = new Color(r, g, b);
                             i += 4;
                         }
-                        else if (colorType == 5 && i + 2 < parameters.Count) // 256-color
+                        else if (colorType == 5 && i + 2 < parameters.Length) // 256-color
                         {
                             int colorIndex = parameters[i + 2];
                             style.Background = Get256Color(colorIndex);
@@ -472,16 +501,8 @@ public static class VTParser {
     private static bool IsDigit(char c) => (uint)(c - '0') <= 9;
 
     /// <summary>
-    /// Represents a text segment with an associated style.
-    /// </summary>
-    private readonly struct TextSegment(string text, StyleState style) {
-        public readonly string Text = text;
-        public readonly StyleState Style = style;
-        public readonly bool HasStyle = style.HasAnyStyle;
-    }
-
-    /// <summary>
     /// Represents the current style state during parsing.
+    /// Uses mutable fields with init properties for efficient parsing.
     /// </summary>
     private struct StyleState {
         public Color? Foreground;
@@ -489,7 +510,9 @@ public static class VTParser {
         public Decoration Decoration;
         public string? Link;
 
-        public readonly bool HasAnyStyle => Foreground.HasValue || Background.HasValue || Decoration != Decoration.None || !string.IsNullOrEmpty(Link);
+        public readonly bool HasAnyStyle =>
+            Foreground.HasValue || Background.HasValue ||
+            Decoration != Decoration.None || Link is not null;
 
         public void Reset() {
             Foreground = null;
@@ -498,46 +521,71 @@ public static class VTParser {
             Link = null;
         }
 
-        public readonly StyleState Clone() => new() {
-            Foreground = Foreground,
-            Background = Background,
-            Decoration = Decoration,
-            Link = Link
-        };
-
-        public readonly Style ToSpectreStyle() => new(Foreground, Background, Decoration, Link);
+        public readonly Style ToSpectreStyle() =>
+            new(Foreground, Background, Decoration, Link);
 
         public readonly string ToMarkup() {
-            var parts = new List<string>();
+            // Use StringBuilder to avoid List<string> allocation
+            // Typical markup is <64 chars, so inline capacity avoids resizing
+            var sb = new StringBuilder(64);
 
             if (Foreground.HasValue) {
-                parts.Add(Foreground.Value.ToMarkup());
+                sb.Append(Foreground.Value.ToMarkup());
             }
             else {
-                parts.Add("Default ");
-
+                sb.Append("Default ");
             }
 
-            if (Background.HasValue)
-                parts.Add($"on {Background.Value.ToMarkup()}");
+            if (Background.HasValue) {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append("on ").Append(Background.Value.ToMarkup());
+            }
 
             if (Decoration != Decoration.None) {
-                if ((Decoration & Decoration.Bold) != 0) parts.Add("bold");
-                if ((Decoration & Decoration.Dim) != 0) parts.Add("dim");
-                if ((Decoration & Decoration.Italic) != 0) parts.Add("italic");
-                if ((Decoration & Decoration.Underline) != 0) parts.Add("underline");
-                if ((Decoration & Decoration.Strikethrough) != 0) parts.Add("strikethrough");
-                if ((Decoration & Decoration.SlowBlink) != 0) parts.Add("slowblink");
-                if ((Decoration & Decoration.RapidBlink) != 0) parts.Add("rapidblink");
-                if ((Decoration & Decoration.Invert) != 0) parts.Add("invert");
-                if ((Decoration & Decoration.Conceal) != 0) parts.Add("conceal");
+                if ((Decoration & Decoration.Bold) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("bold");
+                }
+                if ((Decoration & Decoration.Dim) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("dim");
+                }
+                if ((Decoration & Decoration.Italic) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("italic");
+                }
+                if ((Decoration & Decoration.Underline) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("underline");
+                }
+                if ((Decoration & Decoration.Strikethrough) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("strikethrough");
+                }
+                if ((Decoration & Decoration.SlowBlink) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("slowblink");
+                }
+                if ((Decoration & Decoration.RapidBlink) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("rapidblink");
+                }
+                if ((Decoration & Decoration.Invert) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("invert");
+                }
+                if ((Decoration & Decoration.Conceal) != 0) {
+                    if (sb.Length > 0) sb.Append(' ');
+                    sb.Append("conceal");
+                }
             }
 
             if (!string.IsNullOrEmpty(Link)) {
-                parts.Add($"link={Link}");
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append("link=").Append(Link);
             }
 
-            return string.Join(" ", parts);
+            return sb.ToString();
         }
     }
 }

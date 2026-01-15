@@ -18,7 +18,7 @@ public class MarkdownRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().NotBeEmpty();
+        result.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class MarkdownRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().BeEmpty();
+        result.Should().BeEmpty();
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class MarkdownRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().NotBeEmpty();
+        result.Should().NotBeEmpty();
         // Additional assertions for code block rendering can be added
     }
 
@@ -69,7 +69,7 @@ public class MarkdownRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().HaveCount(1);
+        result.Should().HaveCount(1);
     }
 
     private static Theme CreateTestTheme()

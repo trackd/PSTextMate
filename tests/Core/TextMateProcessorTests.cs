@@ -16,7 +16,7 @@ public class TextMateProcessorTests
 
         // Assert
         result.Should().NotBeNull();
-        result!.Renderables.Should().HaveCount(2);
+        result!.Should().HaveCount(2);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class TextMateProcessorTests
 
         // Assert
         result.Should().NotBeNull();
-        result!.Renderables.Should().HaveCount(1);
+        result!.Should().HaveCount(1);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class TextMateProcessorTests
 
         // Assert
         result.Should().NotBeNull();
-        result!.Renderables.Should().HaveCount(2);
+        result!.Should().HaveCount(2);
     }
 
     [Fact]
@@ -96,14 +96,15 @@ public class TextMateProcessorTests
         int batchSize = 25;
 
         // Act
-        var batches = TextMateProcessor.ProcessLinesInBatches(lines, batchSize, ThemeName.DarkPlus, "powershell", isExtension: false).ToList();
+        var batches = TextMateProcessor.ProcessLinesInBatches(lines, batchSize, ThemeName.DarkPlus, "powershell", isExtension: false);
+        var batchList = batches.ToList();
 
         // Assert
-        batches.Should().HaveCount(4);
-        batches[0].BatchIndex.Should().Be(0);
-        batches[0].FileOffset.Should().Be(0);
-        batches[1].BatchIndex.Should().Be(1);
-        batches[1].FileOffset.Should().Be(25);
+        batchList.Should().HaveCount(4);
+        batchList[0].BatchIndex.Should().Be(0);
+        batchList[0].FileOffset.Should().Be(0);
+        batchList[1].BatchIndex.Should().Be(1);
+        batchList[1].FileOffset.Should().Be(25);
     }
 
     [Fact]
@@ -113,7 +114,7 @@ public class TextMateProcessorTests
         var lines = new[] { "test" };
 
         // Act
-        Action act = () => TextMateProcessor.ProcessLinesInBatches(lines, 0, ThemeName.DarkPlus, "powershell", isExtension: false).ToList();
+        Action act = () => { var _ = TextMateProcessor.ProcessLinesInBatches(lines, 0, ThemeName.DarkPlus, "powershell", isExtension: false).ToList(); };
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>()
@@ -127,7 +128,7 @@ public class TextMateProcessorTests
         string filePath = "non-existent-file.txt";
 
         // Act
-        Action act = () => TextMateProcessor.ProcessFileInBatches(filePath, 100, ThemeName.DarkPlus, "powershell", isExtension: false).ToList();
+        Action act = () => { var _ = TextMateProcessor.ProcessFileInBatches(filePath, 100, ThemeName.DarkPlus, "powershell", isExtension: false).ToList(); };
 
         // Assert
         act.Should().Throw<FileNotFoundException>();

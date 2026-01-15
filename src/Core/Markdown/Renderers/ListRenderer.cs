@@ -68,9 +68,7 @@ internal static class ListRenderer {
     /// <summary>
     /// Creates the appropriate prefix text for list items.
     /// </summary>
-    private static string CreateListPrefixText(bool isOrdered, bool isTaskList, bool isChecked, ref int number) {
-        return isTaskList ? isChecked ? TaskCheckedEmoji : TaskUncheckedEmoji : isOrdered ? $"{number++}. " : UnorderedBullet;
-    }
+    private static string CreateListPrefixText(bool isOrdered, bool isTaskList, bool isChecked, ref int number) => isTaskList ? isChecked ? TaskCheckedEmoji : TaskUncheckedEmoji : isOrdered ? $"{number++}. " : UnorderedBullet;
 
     /// <summary>
     /// Creates the appropriate prefix for list items as styled Text objects.

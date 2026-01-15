@@ -23,8 +23,9 @@ internal static partial class ImageFile {
     /// Normalizes an image source to a local file path that can be used by SixelImage.
     /// </summary>
     /// <param name="imageSource">The image source (file path, URL, or base64 data URI)</param>
+    /// <param name="baseDirectory">Optional base directory for resolving relative paths (defaults to current directory)</param>
     /// <returns>A local file path, or null if the image cannot be processed</returns>
-    public static async Task<string?> NormalizeImageSourceAsync(string imageSource) {
+    public static async Task<string?> NormalizeImageSourceAsync(string imageSource, string? baseDirectory = null) {
         if (string.IsNullOrWhiteSpace(imageSource)) {
             return null;
         }
@@ -47,8 +48,13 @@ internal static partial class ImageFile {
         }
 
         // Try to resolve relative paths
-        string currentDirectory = Environment.CurrentDirectory;
-        string fullPath = Path.GetFullPath(Path.Combine(currentDirectory, imageSource));
+        // Use provided baseDirectory or fall back to current directory
+        string resolveBasePath = baseDirectory ?? Environment.CurrentDirectory;
+        string fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(resolveBasePath, imageSource));
+
+        // Debug: For troubleshooting, we can add logging here if needed
+        // System.Diagnostics.Debug.WriteLine($"Resolving '{imageSource}' with base '{resolveBasePath}' -> '{fullPath}' (exists: {File.Exists(fullPath)})");
+
         return File.Exists(fullPath) ? fullPath : null;
     }
 

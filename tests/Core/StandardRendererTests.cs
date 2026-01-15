@@ -18,7 +18,7 @@ public class StandardRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().HaveCount(3);
+        result.Should().HaveCount(3);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class StandardRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().HaveCount(3);
+        result.Should().HaveCount(3);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class StandardRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().HaveCount(1);
+        result.Should().HaveCount(1);
     }
 
     [Fact]
@@ -79,8 +79,8 @@ public class StandardRendererTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Renderables.Should().HaveCount(3);
-        result.Renderables.Should().ContainInOrder(result.Renderables);
+        result.Should().HaveCount(3);
+        result.Should().ContainInOrder(result);
     }
 
     private static (IGrammar grammar, Theme theme) GetTestGrammarAndTheme()

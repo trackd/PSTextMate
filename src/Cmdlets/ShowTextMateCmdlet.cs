@@ -2,7 +2,7 @@ using System.Management.Automation;
 using PwshSpectreConsole.TextMate;
 using PwshSpectreConsole.TextMate.Core;
 using PwshSpectreConsole.TextMate.Extensions;
-using Spectre.Console;
+using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate.Cmdlets;
@@ -13,13 +13,9 @@ namespace PwshSpectreConsole.TextMate.Cmdlets;
 /// </summary>
 [Cmdlet(VerbsCommon.Show, "TextMate", DefaultParameterSetName = "String")]
 [Alias("st", "Show-Code")]
-[OutputType(typeof(Spectre.Console.Rows), ParameterSetName = new[] { "String" })]
-[OutputType(typeof(Spectre.Console.Rows), ParameterSetName = new[] { "Path" })]
-[OutputType(typeof(RenderableBatch), ParameterSetName = new[] { "Path" })]
+[OutputType(typeof(HighlightedText))]
 public sealed class ShowTextMateCmdlet : PSCmdlet {
-    private static readonly string[] NewLineSplit = ["\r\n", "\n", "\r"];
     private readonly List<string> _inputObjectBuffer = [];
-    private string? _sourceExtensionHint;
 
     /// <summary>
     /// String content to render with syntax highlighting.
@@ -47,7 +43,7 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
 
     /// <summary>
     /// TextMate language ID for syntax highlighting (e.g., 'powershell', 'csharp', 'python').
-    /// If not specified, detected from file extension or content.
+    /// If not specified, detected from file extension (for files) or defaults to 'powershell' (for strings).
     /// </summary>
     [Parameter(
         ParameterSetName = "String"
@@ -89,34 +85,17 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     /// </summary>
     protected override void ProcessRecord() {
         if (ParameterSetName == "String" && InputObject is not null) {
-            // Try to capture an extension hint from ETS note properties on the current pipeline object
-            // (e.g., PSChildName/PSPath added by Get-Content)
-            if (_sourceExtensionHint is null) {
-                if (GetVariableValue("_") is PSObject current) {
-                    string? hint = current.Properties["PSChildName"]?.Value as string
-                                    ?? current.Properties["PSPath"]?.Value as string
-                                    ?? current.Properties["Path"]?.Value as string
-                                    ?? current.Properties["FullName"]?.Value as string;
-                    if (!string.IsNullOrWhiteSpace(hint)) {
-                        string ext = System.IO.Path.GetExtension(hint);
-                        if (!string.IsNullOrWhiteSpace(ext)) {
-                            _sourceExtensionHint = ext;
-                        }
-                    }
-                }
-            }
+            // Simply buffer all strings - no complex detection logic
             _inputObjectBuffer.Add(InputObject);
             return;
         }
 
         if (ParameterSetName == "Path" && !string.IsNullOrWhiteSpace(Path)) {
             try {
-                Spectre.Console.Rows? result = ProcessPathInput();
-                if (result is not null) {
-                    WriteObject(result);
-                    if (PassThru) {
-                        WriteVerbose($"Processed file '{Path}' with theme '{Theme}' {(string.IsNullOrWhiteSpace(Language) ? "(by extension)" : $"(token: {Language})")}");
-                    }
+                // Process file immediately when in Path parameter set
+                foreach (HighlightedText result in ProcessPathInput()) {
+                    // Output each renderable directly so pwshspectreconsole can format them
+                    WriteObject(result.Renderables, enumerateCollection: true);
                 }
             }
             catch (Exception ex) {
@@ -129,18 +108,18 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
     /// Finalizes processing after all pipeline records have been processed.
     /// </summary>
     protected override void EndProcessing() {
-        // For Path parameter set, each record is processed in ProcessRecord to support streaming multiple files.
-        // Only finalize buffered String input here.
+        // Only process buffered strings in EndProcessing
         if (ParameterSetName != "String") {
             return;
         }
 
         try {
-            Spectre.Console.Rows? result = ProcessStringInput();
+            HighlightedText? result = ProcessStringInput();
             if (result is not null) {
-                WriteObject(result);
+                // Output each renderable directly so pwshspectreconsole can format them
+                WriteObject(result.Renderables, enumerateCollection: true);
                 if (PassThru) {
-                    WriteVerbose($"Processed {_inputObjectBuffer.Count} lines with theme '{Theme}' {(string.IsNullOrWhiteSpace(Language) ? "(by hint/default)" : $"(token: {Language})")}");
+                    WriteVerbose($"Processed {_inputObjectBuffer.Count} line(s) with theme '{Theme}' {GetLanguageDescription()}");
                 }
             }
         }
@@ -149,78 +128,104 @@ public sealed class ShowTextMateCmdlet : PSCmdlet {
         }
     }
 
-    private Spectre.Console.Rows? ProcessStringInput() {
+    private HighlightedText? ProcessStringInput() {
         if (_inputObjectBuffer.Count == 0) {
             WriteVerbose("No input provided");
             return null;
         }
 
-        string[] strings = [.. _inputObjectBuffer];
-        // If only one string and it contains any newline, split it into lines for correct rendering
-        if (strings.Length == 1 && (strings[0].Contains('\n') || strings[0].Contains('\r'))) {
-            strings = strings[0].Split(NewLineSplit, StringSplitOptions.None);
-        }
-        if (strings.AllIsNullOrEmpty()) {
+        // Normalize buffered strings into lines
+        string[] lines = NormalizeToLines(_inputObjectBuffer);
+
+        if (lines.AllIsNullOrEmpty()) {
             WriteVerbose("All input strings are null or empty");
             return null;
         }
 
-        // If a Language token was provided, resolve it first (language id or extension)
-        if (!string.IsNullOrWhiteSpace(Language)) {
-            (string? token, bool asExtension) = TextMateResolver.ResolveToken(Language);
-            return Converter.ProcessLines(strings, Theme, token, isExtension: asExtension);
-        }
+        // Resolve language (explicit parameter or default)
+        string effectiveLanguage = Language ?? "powershell";
+        (string? token, bool asExtension) = TextMateResolver.ResolveToken(effectiveLanguage);
 
-        // Otherwise prefer extension hint from ETS (PSChildName/PSPath)
-        if (!string.IsNullOrWhiteSpace(_sourceExtensionHint)) {
-            return Converter.ProcessLines(strings, Theme, _sourceExtensionHint, isExtension: true);
-        }
+        // Process and wrap in HighlightedText
+        IRenderable[]? renderables = TextMateProcessor.ProcessLines(lines, Theme, token, isExtension: asExtension);
 
-        // Final fallback: default language
-        return Converter.ProcessLines(strings, Theme, "powershell", isExtension: false);
+        return renderables is null
+            ? null
+            : new HighlightedText {
+                Renderables = renderables
+            };
     }
 
-    private Spectre.Console.Rows? ProcessPathInput() {
+    private IEnumerable<HighlightedText> ProcessPathInput() {
         FileInfo filePath = new(GetUnresolvedProviderPathFromPSPath(Path));
 
         if (!filePath.Exists) {
             throw new FileNotFoundException($"File not found: {filePath.FullName}", filePath.FullName);
         }
 
-        // Decide how to interpret based on precedence:
-        // 1) Language token (can be a language id OR an extension)
-        // 2) File extension
+        // Set the base directory for relative image path resolution in markdown
+        // Use the full directory path or current directory if not available
+        string markdownBaseDir = filePath.DirectoryName ?? Environment.CurrentDirectory;
+        Core.Markdown.Renderers.ImageRenderer.CurrentMarkdownDirectory = markdownBaseDir;
+        WriteVerbose($"Set markdown base directory for image resolution: {markdownBaseDir}");
+
+        // Resolve language: explicit parameter > file extension
+        (string token, bool asExtension) = !string.IsNullOrWhiteSpace(Language)
+            ? TextMateResolver.ResolveToken(Language)
+            : (filePath.Extension, true);
+
         if (Stream.IsPresent) {
-            // Stream file in batches
-            int batchIndex = 0;
-            if (!string.IsNullOrWhiteSpace(Language)) {
-                (string? token, bool asExtension) = TextMateResolver.ResolveToken(Language);
-                WriteVerbose($"Streaming file: {filePath.FullName} with explicit token: {Language} (as {(asExtension ? "extension" : "language")}) in batches of {BatchSize}");
-                foreach (RenderableBatch batch in TextMateProcessor.ProcessFileInBatches(filePath.FullName, BatchSize, Theme, token, asExtension)) {
-                    // Attach a stable batch index so consumers can track ordering
-                    var indexed = new RenderableBatch(batch.Renderables, batchIndex: batchIndex++, fileOffset: batch.FileOffset);
-                    WriteObject(indexed);
-                }
-                return null;
-            }
+            // Streaming mode - yield HighlightedText objects directly from processor
+            WriteVerbose($"Streaming file: {filePath.FullName} with {(asExtension ? "extension" : "language")}: {token}, batch size: {BatchSize}");
 
-            string extension = filePath.Extension;
-            WriteVerbose($"Streaming file: {filePath.FullName} using file extension: {extension} in batches of {BatchSize}");
-            foreach (RenderableBatch batch in TextMateProcessor.ProcessFileInBatches(filePath.FullName, BatchSize, Theme, extension, true)) {
-                var indexed = new RenderableBatch(batch.Renderables, batchIndex: batchIndex++, fileOffset: batch.FileOffset);
-                WriteObject(indexed);
+            // Direct passthrough - processor returns HighlightedText now
+            foreach (HighlightedText result in TextMateProcessor.ProcessFileInBatches(filePath.FullName, BatchSize, Theme, token, asExtension)) {
+                yield return result;
             }
-            return null;
+        }
+        else {
+            // Single file processing
+            WriteVerbose($"Processing file: {filePath.FullName} with {(asExtension ? "extension" : "language")}: {token}");
+
+            string[] lines = File.ReadAllLines(filePath.FullName);
+            IRenderable[]? renderables = TextMateProcessor.ProcessLines(lines, Theme, token, isExtension: asExtension);
+
+            if (renderables is not null) {
+                yield return new HighlightedText {
+                    Renderables = renderables
+                };
+            }
+        }
+    }
+
+    private static string[] NormalizeToLines(List<string> buffer) {
+        if (buffer.Count == 0) {
+            return [];
         }
 
-        string[] lines = File.ReadAllLines(filePath.FullName);
-        if (!string.IsNullOrWhiteSpace(Language)) {
-            (string? token, bool asExtension) = TextMateResolver.ResolveToken(Language);
-            WriteVerbose($"Processing file: {filePath.FullName} with explicit token: {Language} (as {(asExtension ? "extension" : "language")})");
-            return Converter.ProcessLines(lines, Theme, token, isExtension: asExtension);
+        // Multiple strings in buffer - treat each as a line
+        if (buffer.Count > 1) {
+            return [.. buffer];
         }
-        string extension2 = filePath.Extension;
-        WriteVerbose($"Processing file: {filePath.FullName} using file extension: {extension2}");
-        return Converter.ProcessLines(lines, Theme, extension2, isExtension: true);
+
+        // Single string - check if it contains newlines
+        string single = buffer[0];
+        if (string.IsNullOrEmpty(single)) {
+            return [single];
+        }
+
+        // Split on newlines if present
+        if (single.Contains('\n') || single.Contains('\r')) {
+            return single.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
+        }
+
+        // Single string with no newlines
+        return [single];
+    }
+
+    private string GetLanguageDescription() {
+        return string.IsNullOrWhiteSpace(Language)
+            ? "(language: default 'powershell')"
+            : $"(language: '{Language}')";
     }
 }

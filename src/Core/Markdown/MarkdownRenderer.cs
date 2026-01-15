@@ -19,8 +19,8 @@ internal static class MarkdownRenderer {
     /// <param name="markdown">Markdown text (can be multi-line)</param>
     /// <param name="theme">Theme object for styling</param>
     /// <param name="themeName">Theme name for TextMateProcessor</param>
-    /// <returns>Rows object for Spectre.Console rendering</returns>
-    public static Rows Render(string markdown, Theme theme, ThemeName themeName) {
+    /// <returns>Array of renderables for Spectre.Console rendering</returns>
+    public static IRenderable[] Render(string markdown, Theme theme, ThemeName themeName) {
         MarkdownPipeline? pipeline = CreateMarkdownPipeline();
         Markdig.Syntax.MarkdownDocument? document = Markdig.Markdown.Parse(markdown, pipeline);
 
@@ -49,7 +49,7 @@ internal static class MarkdownRenderer {
             }
         }
 
-        return new Rows([.. rows]);
+        return [.. rows];
     }
 
     /// <summary>

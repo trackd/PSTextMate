@@ -1,5 +1,6 @@
 using PwshSpectreConsole.TextMate.Core;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
 
 namespace PwshSpectreConsole.TextMate;
@@ -16,8 +17,8 @@ public static class Converter {
     /// <param name="grammarId"></param>
     /// <param name="isExtension"></param>
     /// <returns></returns>
-    public static Spectre.Console.Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false) {
-        Core.Rows? rows = TextMateProcessor.ProcessLines(lines, themeName, grammarId, isExtension);
-        return rows is null ? null : new Spectre.Console.Rows(rows.Renderables);
+    public static Rows? ProcessLines(string[] lines, ThemeName themeName, string grammarId, bool isExtension = false) {
+        IRenderable[]? renderables = TextMateProcessor.ProcessLines(lines, themeName, grammarId, isExtension);
+        return renderables is null ? null : new Rows(renderables);
     }
 }

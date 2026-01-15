@@ -31,11 +31,9 @@ internal static class CodeBlockRenderer {
 
         if (!string.IsNullOrEmpty(language)) {
             try {
-                Rows? rows = TextMateProcessor.ProcessLinesCodeBlock(codeLines, themeName, language, false);
-                if (rows is not null) {
-                    // Convert internal Rows into Spectre.Console.Rows for Panel consumption
-                    var spectreRows = new Spectre.Console.Rows(rows.Renderables);
-                    return new Panel(spectreRows)
+                IRenderable[]? renderables = TextMateProcessor.ProcessLinesCodeBlock(codeLines, themeName, language, false);
+                if (renderables is not null) {
+                    return new Panel(new Rows(renderables))
                         .Border(BoxBorder.Rounded)
                         .Header(language, Justify.Left);
                 }

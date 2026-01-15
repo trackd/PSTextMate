@@ -20,9 +20,9 @@ internal static class StandardRenderer {
     /// <param name="theme">Theme to apply</param>
     /// <param name="grammar">Grammar for tokenization</param>
     /// <returns>Rendered rows with syntax highlighting</returns>
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar) => Render(lines, theme, grammar, null);
+    public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar) => Render(lines, theme, grammar, null);
 
-    public static Rows Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback) {
+    public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback) {
         StringBuilder builder = StringBuilderPool.Rent();
         List<IRenderable> rows = new(lines.Length);
 
@@ -38,7 +38,7 @@ internal static class StandardRenderer {
                 builder.Clear();
             }
 
-            return new Rows([.. rows]);
+            return [.. rows];
         }
         catch (ArgumentException ex) {
             throw new InvalidOperationException($"Argument error during rendering: {ex.Message}", ex);

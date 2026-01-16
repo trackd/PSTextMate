@@ -1,7 +1,7 @@
 using Spectre.Console;
 using TextMateSharp.Themes;
 
-namespace PwshSpectreConsole.TextMate.Core;
+namespace PSTextMate.Core;
 
 /// <summary>
 /// Provides utility methods for style and color conversion operations.

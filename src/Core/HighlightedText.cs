@@ -1,7 +1,7 @@
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
-namespace PwshSpectreConsole.TextMate.Core;
+namespace PSTextMate.Core;
 
 /// <summary>
 /// Represents syntax-highlighted text ready for rendering.

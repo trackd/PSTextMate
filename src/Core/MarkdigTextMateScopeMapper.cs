@@ -1,4 +1,4 @@
-namespace PwshSpectreConsole.TextMate.Core;
+namespace PSTextMate.Core;
 
 /// <summary>
 /// Maps Markdig markdown element types to TextMate scopes for theme lookup.

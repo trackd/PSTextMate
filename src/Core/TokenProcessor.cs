@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text;
-using PwshSpectreConsole.TextMate.Extensions;
+using PSTextMate.Utilities;
 using Spectre.Console;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
 
-namespace PwshSpectreConsole.TextMate.Core;
+namespace PSTextMate.Core;
 
 /// <summary>
 /// Provides optimized token processing and styling operations.
@@ -29,7 +29,6 @@ internal static class TokenProcessor {
     /// <param name="line">Source line text</param>
     /// <param name="theme">Theme for styling</param>
     /// <param name="builder">StringBuilder for output</param>
-    /// <param name="debugCallback">Optional callback for debugging</param>
     /// <param name="lineIndex">Line index for debugging context</param>
     /// <param name="escapeMarkup">Whether to escape markup characters (true for normal text, false for code blocks)</param>
     public static void ProcessTokensBatch(
@@ -37,7 +36,6 @@ internal static class TokenProcessor {
         string line,
         Theme theme,
         StringBuilder builder,
-        Action<TokenDebugInfo>? debugCallback = null,
         int? lineIndex = null,
         bool escapeMarkup = true) {
         foreach (IToken token in tokens) {
@@ -53,26 +51,11 @@ internal static class TokenProcessor {
 
             // Only extract numeric theme properties when debugging is enabled to reduce work
             (int foreground, int background, FontStyle fontStyle) = (-1, -1, FontStyle.NotSet);
-            if (debugCallback is not null) {
-                (foreground, background, fontStyle) = ExtractThemeProperties(token, theme);
-            }
 
             // Use the returning API so callers can append with style consistently (prevents markup regressions)
             (string processedText, Style? resolvedStyle) = WriteTokenOptimizedReturn(textSpan, style, theme, escapeMarkup);
             builder.AppendWithStyle(resolvedStyle, processedText);
 
-            debugCallback?.Invoke(new TokenDebugInfo {
-                LineIndex = lineIndex,
-                StartIndex = startIndex,
-                EndIndex = endIndex,
-                Text = line.SubstringAtIndexes(startIndex, endIndex),
-                Scopes = token.Scopes,
-                Foreground = foreground,
-                Background = background,
-                FontStyle = fontStyle,
-                Style = style,
-                Theme = theme.GetGuiColorDictionary()
-            });
         }
     }
 

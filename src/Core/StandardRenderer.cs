@@ -1,11 +1,11 @@
 using System.Text;
-using PwshSpectreConsole.TextMate.Helpers;
+using PSTextMate.Utilities;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using TextMateSharp.Grammars;
 using TextMateSharp.Themes;
 
-namespace PwshSpectreConsole.TextMate.Core;
+namespace PSTextMate.Core;
 
 /// <summary>
 /// Provides optimized rendering for standard (non-Markdown) TextMate grammars.
@@ -20,9 +20,9 @@ internal static class StandardRenderer {
     /// <param name="theme">Theme to apply</param>
     /// <param name="grammar">Grammar for tokenization</param>
     /// <returns>Rendered rows with syntax highlighting</returns>
-    public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar) => Render(lines, theme, grammar, null);
+    // public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar) => Render(lines, theme, grammar);
 
-    public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar, Action<TokenDebugInfo>? debugCallback) {
+    public static IRenderable[] Render(string[] lines, Theme theme, IGrammar grammar) {
         StringBuilder builder = StringBuilderPool.Rent();
         List<IRenderable> rows = new(lines.Length);
 
@@ -32,7 +32,7 @@ internal static class StandardRenderer {
                 string line = lines[lineIndex];
                 ITokenizeLineResult result = grammar.TokenizeLine(line, ruleStack, TimeSpan.MaxValue);
                 ruleStack = result.RuleStack;
-                TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, debugCallback, lineIndex);
+                TokenProcessor.ProcessTokensBatch(result.Tokens, line, theme, builder, lineIndex);
                 string? lineMarkup = builder.ToString();
                 rows.Add(string.IsNullOrEmpty(lineMarkup) ? Text.Empty : new Markup(lineMarkup));
                 builder.Clear();

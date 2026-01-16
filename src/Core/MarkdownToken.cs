@@ -1,6 +1,6 @@
 using TextMateSharp.Grammars;
 
-namespace PwshSpectreConsole.TextMate.Core;
+namespace PSTextMate.Core;
 
 /// <summary>
 /// Simple token for theme lookup from a set of scopes (for markdown elements).

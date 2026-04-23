@@ -32,6 +32,7 @@ internal sealed class PagerViewportEngine {
         int measurementHeight = windowHeight > 0 ? windowHeight : Math.Max(1, contentRows + 3);
         var size = new Size(width, measurementHeight);
         var options = new RenderOptions(capabilities, size);
+        int contentWidth = GetRenderableContentWidth(width);
 
         for (int i = 0; i < _renderables.Count; i++) {
             IRenderable? renderable = _renderables[i];
@@ -53,19 +54,14 @@ internal sealed class PagerViewportEngine {
             }
 
             try {
-                // For non-image renderables, render to segments to get accurate row count.
-                // This avoids overflow/cropping artifacts when wrapped text spans many rows.
-                var segments = renderable.Render(options, width).ToList();
-                int lines = CountLinesSegments(segments);
+                int lines = CountRenderedLines(renderable, options, contentWidth);
                 _renderableHeights.Add(Math.Max(1, lines));
             }
             catch (InvalidOperationException) {
-                // Fallback: assume single-line if measurement fails.
-                _renderableHeights.Add(1);
+                _renderableHeights.Add(EstimateRenderableHeight(renderable, options, contentWidth));
             }
             catch (IOException) {
-                // Fallback: assume single-line if measurement fails.
-                _renderableHeights.Add(1);
+                _renderableHeights.Add(EstimateRenderableHeight(renderable, options, contentWidth));
             }
         }
 
@@ -194,13 +190,47 @@ internal sealed class PagerViewportEngine {
         => _sourceHighlightedText is not null
             && _sourceHighlightedText.Language.Contains("markdown", StringComparison.OrdinalIgnoreCase);
 
-    private static int CountLinesSegments(List<Segment> segments) {
-        if (segments.Count == 0) {
+    private int GetRenderableContentWidth(int width) {
+        int availableWidth = Math.Max(1, width);
+        if (_sourceHighlightedText is null || !_sourceHighlightedText.ShowLineNumbers) {
+            return availableWidth;
+        }
+
+        int lineNumberWidth = ResolveLineNumberWidth();
+        int gutterWidth = lineNumberWidth + _sourceHighlightedText.GutterSeparator.Length;
+        return Math.Max(1, availableWidth - gutterWidth);
+    }
+
+    private int ResolveLineNumberWidth() {
+        if (_sourceHighlightedText is null) {
             return 0;
         }
 
-        int lineBreaks = segments.Count(segment => segment.IsLineBreak);
-        return lineBreaks == 0 ? 1 : segments[^1].IsLineBreak ? lineBreaks : lineBreaks + 1;
+        if (_sourceHighlightedText.LineNumberWidth is int explicitWidth && explicitWidth > 0) {
+            return explicitWidth;
+        }
+
+        int lastLineNumber = _sourceHighlightedText.LineNumberStart + Math.Max(0, _renderables.Count - 1);
+        return lastLineNumber.ToString(CultureInfo.InvariantCulture).Length;
+    }
+
+    private static int CountRenderedLines(IRenderable renderable, RenderOptions options, int width) {
+        List<SegmentLine> lines = Segment.SplitLines(renderable.Render(options, width), Math.Max(1, width));
+        return Math.Max(1, lines.Count);
+    }
+
+    private static int EstimateRenderableHeight(IRenderable renderable, RenderOptions options, int width) {
+        try {
+            Measurement measurement = renderable.Measure(options, width);
+            int measuredWidth = Math.Max(1, measurement.Max);
+            return Math.Max(1, (int)Math.Ceiling((double)measuredWidth / Math.Max(1, width)));
+        }
+        catch (InvalidOperationException) {
+            return 1;
+        }
+        catch (IOException) {
+            return 1;
+        }
     }
 
     private static int EstimateImageHeight(IRenderable renderable, int width, int contentRows, RenderOptions options) {

@@ -12,7 +12,19 @@ public sealed class OutPageCmdlet : PSCmdlet {
     private HighlightedText? _singleHighlightedText;
     private bool _sawNonHighlightedInput;
 
-    [Parameter(Mandatory = true, ValueFromPipeline = true, Position = 0)]
+    [Parameter(
+        ValueFromRemainingArguments = true,
+        DontShow = true,
+        Position = 0
+    )]
+    [System.Management.Automation.AllowNull]
+    public PSObject[]? EaterOfArgs { get; set; }
+
+    [Parameter(
+        Mandatory = true,
+        ValueFromPipeline = true,
+        DontShow = true
+    )]
     [System.Management.Automation.AllowNull]
     public PSObject? InputObject { get; set; }
 

@@ -161,7 +161,17 @@ public sealed class Pager {
     private void Navigate(LiveDisplayContext ctx) {
         bool running = true;
         (WindowWidth, WindowHeight) = GetPagerSize();
-        bool forceRedraw = true;
+        bool forceRedraw = false;
+
+        if (!_suppressTerminalControlSequences) {
+            VTHelpers.BeginSynchronizedOutput();
+            try {
+                ctx.Refresh();
+            }
+            finally {
+                VTHelpers.EndSynchronizedOutput();
+            }
+        }
 
         while (running) {
             (int width, int pageHeight) = GetPagerSize();
@@ -190,19 +200,13 @@ public sealed class Pager {
                     PagerViewportWindow viewport = _viewportEngine.BuildViewport(_top, contentRows);
                     _top = viewport.Top;
 
-                    bool fullClear = resized || viewport.HasImages || _lastPageHadImages;
-                    if (!_suppressTerminalControlSequences) {
-                        if (fullClear) {
-                            VTHelpers.ClearScreen();
-                        }
-                        else {
-                            VTHelpers.SetCursorPosition(1, 1);
-                        }
+                    bool requiresFullClear = viewport.HasImages || _lastPageHadImages;
+                    if (!_suppressTerminalControlSequences && requiresFullClear) {
+                        VTHelpers.ClearScreen();
                     }
 
                     IRenderable target = BuildRenderable(viewport, width);
                     ctx.UpdateTarget(target);
-                    ctx.Refresh();
 
                     // Clear any stale lines after a terminal shrink.
                     if (!_suppressTerminalControlSequences && _lastRenderedRows > pageHeight) {

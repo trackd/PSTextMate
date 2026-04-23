@@ -36,4 +36,15 @@ public sealed class SpectreConsoleTestingTests {
         Assert.Contains("Error", escaped);
         Assert.Contains("Warning", escaped);
     }
+
+    [Fact]
+    public void VTConversion_ToParagraph_UsesTabStopsWithoutNormalizingInput() {
+        string input = "\u001b[32m1158\u001b[0m:\t\ttext";
+        var console = new TestConsole();
+        console.Profile.Width = 80;
+
+        console.Write(VTConversion.ToParagraph(input));
+
+        Assert.Contains("1158:           text", console.Output, StringComparison.Ordinal);
+    }
 }

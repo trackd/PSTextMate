@@ -156,6 +156,45 @@ public sealed class PagerCoreTests {
     }
 
     [Fact]
+    public void RecalculateHeights_WrappedParagraphs_ReserveWrappedRows() {
+        string vtLine = "\u001b[36m" + new string('x', 60) + "\u001b[0m";
+        IRenderable[] renderables = [
+            VTConversion.ToParagraph(vtLine),
+            VTConversion.ToParagraph(vtLine),
+            VTConversion.ToParagraph(vtLine)
+        ];
+
+        PagerViewportEngine engine = new(renderables, sourceHighlightedText: null);
+
+        engine.RecalculateHeights(width: 20, contentRows: 4, windowHeight: 24, AnsiConsole.Console);
+        PagerViewportWindow viewport = engine.BuildViewport(proposedTop: 0, contentRows: 4);
+
+        Assert.Contains(Environment.NewLine, Writer.WriteToString(renderables[0], width: 20), StringComparison.Ordinal);
+        Assert.Equal(1, viewport.Count);
+        Assert.Equal(1, viewport.EndExclusive);
+    }
+
+    [Fact]
+    public void RecalculateHeights_LineNumbersReduceContentWidth() {
+        IRenderable[] renderables = [
+            new Text(new string('x', 18)),
+            new Text(new string('y', 18)),
+            new Text(new string('z', 18))
+        ];
+        HighlightedText highlighted = new(renderables, showLineNumbers: true) {
+            LineNumberStart = 1
+        };
+
+        PagerViewportEngine engine = new(renderables, highlighted);
+
+        engine.RecalculateHeights(width: 20, contentRows: 4, windowHeight: 24, AnsiConsole.Console);
+        PagerViewportWindow viewport = engine.BuildViewport(proposedTop: 0, contentRows: 4);
+
+        Assert.Equal(2, viewport.Count);
+        Assert.Equal(2, viewport.EndExclusive);
+    }
+
+    [Fact]
     public void SetQuery_LinkRenderable_MatchesLabelAndUrl() {
         PagerDocument document = new([
             new Text("Guide"),

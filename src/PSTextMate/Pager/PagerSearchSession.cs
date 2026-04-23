@@ -42,7 +42,7 @@ internal sealed class PagerSearchSession {
             return _hits[CurrentHitIndex];
         }
 
-        int nearest = _hits.FindIndex(hit => hit.RenderableIndex >= topIndex);
+        int nearest = FindFirstHitAtOrAfter(topIndex);
         CurrentHitIndex = nearest >= 0 ? nearest : 0;
         return _hits[CurrentHitIndex];
     }
@@ -58,7 +58,7 @@ internal sealed class PagerSearchSession {
             return _hits[CurrentHitIndex];
         }
 
-        int nearest = _hits.FindLastIndex(hit => hit.RenderableIndex <= topIndex);
+        int nearest = FindLastHitAtOrBefore(topIndex);
         CurrentHitIndex = nearest >= 0 ? nearest : _hits.Count - 1;
         return _hits[CurrentHitIndex];
     }
@@ -68,6 +68,9 @@ internal sealed class PagerSearchSession {
             ? matches
             : s_noHits;
     }
+
+    public bool HasHitsForRenderable(int renderableIndex)
+        => _hitsByRenderable.ContainsKey(renderableIndex);
 
     private void RebuildHits() {
         _hits.Clear();
@@ -105,6 +108,40 @@ internal sealed class PagerSearchSession {
             }
         }
 
+    }
+
+    private int FindFirstHitAtOrAfter(int topIndex) {
+        int low = 0;
+        int high = _hits.Count;
+
+        while (low < high) {
+            int mid = low + ((high - low) / 2);
+            if (_hits[mid].RenderableIndex < topIndex) {
+                low = mid + 1;
+            }
+            else {
+                high = mid;
+            }
+        }
+
+        return low < _hits.Count ? low : -1;
+    }
+
+    private int FindLastHitAtOrBefore(int topIndex) {
+        int low = 0;
+        int high = _hits.Count;
+
+        while (low < high) {
+            int mid = low + ((high - low) / 2);
+            if (_hits[mid].RenderableIndex <= topIndex) {
+                low = mid + 1;
+            }
+            else {
+                high = mid;
+            }
+        }
+
+        return low > 0 ? low - 1 : -1;
     }
 
     private static (int line, int column) ResolveLineColumn(int[] lineStarts, int offset) {

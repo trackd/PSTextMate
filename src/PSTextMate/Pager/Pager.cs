@@ -1,7 +1,7 @@
 namespace PSTextMate.Terminal;
 
 /// <summary>
-/// Simple pager implemented with Spectre.Console Live display.
+/// Simple interactive pager with a pluggable display host.
 /// Interaction keys:
 /// - Up/Down or j/k: move one renderable item
 /// - PageUp/PageDown/Space or h/l: move by one viewport of items
@@ -14,7 +14,9 @@ namespace PSTextMate.Terminal;
 /// </summary>
 public sealed class Pager {
     private static readonly PagerExclusivityMode s_pagerExclusivityMode = new();
+    private static readonly Panel s_helpOverlayPanel = CreateHelpOverlayPanel();
     private readonly IAnsiConsole _console;
+    private readonly IPagerDisplayHost _displayHost;
     private readonly Func<ConsoleKeyInfo?>? _tryReadKeyOverride;
     private readonly bool _suppressTerminalControlSequences;
     private readonly IReadOnlyList<IRenderable> _renderables;
@@ -39,6 +41,18 @@ public sealed class Pager {
     private static readonly Style SearchMatchTextStyle = new(Color.Black, Color.Orange1);
     private const int KeyPollingIntervalMs = 50;
     private const int MaxSearchQueryLength = 256;
+
+    private static IPagerDisplayHost GetDefaultDisplayHost(bool suppressTerminalControlSequences, PagerDocument document, IAnsiConsole console) {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(console);
+
+        return suppressTerminalControlSequences
+            || !console.Profile.Capabilities.Ansi
+            || document.Entries.Any(static entry => entry.IsImage)
+            ? SpectreLivePagerDisplayHost.Instance
+            : DirectAnsiPagerDisplayHost.Instance;
+    }
+
     private bool TryReadKey(out ConsoleKeyInfo key) {
         if (_tryReadKeyOverride is not null) {
             ConsoleKeyInfo? injected = _tryReadKeyOverride();
@@ -117,6 +131,62 @@ public sealed class Pager {
         }
     }
 
+    private sealed class RenderableSliceRows : Renderable {
+        private readonly IReadOnlyList<IRenderable> _source;
+        private readonly int _start;
+        private readonly int _count;
+
+        public RenderableSliceRows(IReadOnlyList<IRenderable> source, int start, int count) {
+            _source = source ?? throw new ArgumentNullException(nameof(source));
+            _start = Math.Max(0, start);
+            _count = Math.Max(0, count);
+        }
+
+        protected override Measurement Measure(RenderOptions options, int maxWidth) {
+            int min = 0;
+            int max = 0;
+            int end = GetEndIndex();
+
+            for (int i = _start; i < end; i++) {
+                IRenderable child = _source[i];
+                Measurement measurement = child.Measure(options, maxWidth);
+                min = Math.Max(min, measurement.Min);
+                max = Math.Max(max, measurement.Max);
+            }
+
+            return new Measurement(min, max);
+        }
+
+        protected override IEnumerable<Segment> Render(RenderOptions options, int maxWidth) {
+            int end = GetEndIndex();
+            for (int i = _start; i < end; i++) {
+                IRenderable child = _source[i];
+                using IEnumerator<Segment> segments = child.Render(options, maxWidth).GetEnumerator();
+                if (!segments.MoveNext()) {
+                    continue;
+                }
+
+                while (true) {
+                    Segment current = segments.Current;
+                    bool hasMore = segments.MoveNext();
+
+                    yield return current;
+
+                    if (!hasMore) {
+                        if (!current.IsLineBreak && child is not ControlCode) {
+                            yield return Segment.LineBreak;
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        private int GetEndIndex()
+            => Math.Clamp(_start + _count, _start, _source.Count);
+    }
+
 
     public Pager(HighlightedText highlightedText) {
         _console = AnsiConsole.Console;
@@ -131,6 +201,7 @@ public sealed class Pager {
         _originalLineNumberWidth = highlightedText.LineNumberWidth;
 
         _document = PagerDocument.FromHighlightedText(highlightedText);
+        _displayHost = GetDefaultDisplayHost(_suppressTerminalControlSequences, _document, _console);
         _renderables = _document.Renderables;
         _search = new PagerSearchSession(_document);
         _viewportEngine = new PagerViewportEngine(_renderables, _sourceHighlightedText);
@@ -144,21 +215,35 @@ public sealed class Pager {
 
     internal Pager(
         IEnumerable<IRenderable> renderables,
+        IReadOnlyList<string?>? sourceLines,
         IAnsiConsole console,
         Func<ConsoleKeyInfo?>? tryReadKeyOverride = null,
-        bool suppressTerminalControlSequences = false
+        bool suppressTerminalControlSequences = false,
+        IPagerDisplayHost? displayHost = null
     ) {
         _console = console ?? throw new ArgumentNullException(nameof(console));
         _tryReadKeyOverride = tryReadKeyOverride;
         _suppressTerminalControlSequences = suppressTerminalControlSequences;
-        _document = new PagerDocument(renderables ?? []);
+        _document = new PagerDocument(renderables ?? [], sourceLines);
+        _displayHost = displayHost ?? GetDefaultDisplayHost(_suppressTerminalControlSequences, _document, _console);
         _renderables = _document.Renderables;
         _search = new PagerSearchSession(_document);
         _viewportEngine = new PagerViewportEngine(_renderables, _sourceHighlightedText);
         _statusColumnWidth = GetStatusColumnWidth(_renderables.Count);
         _top = 0;
     }
-    private void Navigate(LiveDisplayContext ctx) {
+
+    internal Pager(
+        IEnumerable<IRenderable> renderables,
+        IAnsiConsole console,
+        Func<ConsoleKeyInfo?>? tryReadKeyOverride = null,
+        bool suppressTerminalControlSequences = false,
+        IPagerDisplayHost? displayHost = null
+    )
+        : this(renderables, sourceLines: null, console, tryReadKeyOverride, suppressTerminalControlSequences, displayHost) {
+    }
+
+    private void Navigate(IPagerDisplayContext ctx) {
         bool running = true;
         (WindowWidth, WindowHeight) = GetPagerSize();
         bool forceRedraw = false;
@@ -201,7 +286,7 @@ public sealed class Pager {
                     _top = viewport.Top;
 
                     bool requiresFullClear = viewport.HasImages || _lastPageHadImages;
-                    if (!_suppressTerminalControlSequences && requiresFullClear) {
+                    if (!_suppressTerminalControlSequences && requiresFullClear && !_displayHost.RefreshReplacesViewport) {
                         VTHelpers.ClearScreen();
                     }
 
@@ -209,7 +294,7 @@ public sealed class Pager {
                     ctx.UpdateTarget(target);
 
                     // Clear any stale lines after a terminal shrink.
-                    if (!_suppressTerminalControlSequences && _lastRenderedRows > pageHeight) {
+                    if (!_suppressTerminalControlSequences && _lastRenderedRows > pageHeight && !_displayHost.RefreshReplacesViewport) {
                         for (int r = pageHeight + 1; r <= _lastRenderedRows; r++) {
                             VTHelpers.ClearRow(r);
                         }
@@ -493,7 +578,10 @@ public sealed class Pager {
         };
     }
 
-    private static Panel BuildHelpOverlayPanel() {
+    private static Panel BuildHelpOverlayPanel()
+        => s_helpOverlayPanel;
+
+    private static Panel CreateHelpOverlayPanel() {
         var helpRows = new Rows(
             new Text("Keybindings", new Style(Color.White, decoration: Decoration.Bold)),
             Text.Empty,
@@ -532,7 +620,9 @@ public sealed class Pager {
             return _sourceHighlightedText;
         }
 
-        return _search.HasQuery ? BuildSearchAwareContent(viewport) : new Rows(_renderables.Skip(viewport.Top).Take(viewport.Count));
+        return _search.HasQuery
+            ? BuildSearchAwareContent(viewport)
+            : new RenderableSliceRows(_renderables, viewport.Top, viewport.Count);
     }
 
     private List<IRenderable> BuildSearchAwareItems(PagerViewportWindow viewport) {
@@ -546,86 +636,21 @@ public sealed class Pager {
         return items;
     }
 
-    private Rows BuildSearchAwareContent(PagerViewportWindow viewport)
-        => new(BuildSearchAwareItems(viewport));
-
-    private IRenderable ApplySearchHighlight(int renderableIndex, IRenderable renderable) {
-        IReadOnlyList<PagerSearchHit> hits = _search.GetHitsForRenderable(renderableIndex);
-
-        string plainText = GetSearchTextForHighlight(renderableIndex, renderable);
-        if (plainText.Length == 0 || !_search.HasQuery) {
-            return renderable;
-        }
-
-        if (hits.Count == 0) {
-            hits = BuildQueryHits(plainText, _search.Query, renderableIndex);
-            if (hits.Count == 0) {
-                return renderable;
-            }
-        }
-
-        bool highlightLinkedLabelsOnNoDirectMatch = hits.Count > 0;
-        return PagerHighlighting.BuildSegmentHighlightRenderable(
-            renderable,
-            _search.Query,
-            SearchRowTextStyle,
-            SearchMatchTextStyle,
-            highlightLinkedLabelsOnNoDirectMatch
-        );
+    private RenderableSliceRows BuildSearchAwareContent(PagerViewportWindow viewport) {
+        List<IRenderable> highlightedItems = BuildSearchAwareItems(viewport);
+        return new RenderableSliceRows(highlightedItems, 0, highlightedItems.Count);
     }
 
-    private static List<PagerSearchHit> BuildQueryHits(string plainText, string query, int renderableIndex) {
-        if (string.IsNullOrEmpty(plainText) || string.IsNullOrWhiteSpace(query)) {
-            return [];
-        }
-
-        string normalizedQuery = query.Trim();
-        if (normalizedQuery.Length == 0) {
-            return [];
-        }
-
-        var hits = new List<PagerSearchHit>();
-        int searchStart = 0;
-        while (searchStart <= plainText.Length - normalizedQuery.Length) {
-            int hitOffset = plainText.IndexOf(normalizedQuery, searchStart, StringComparison.OrdinalIgnoreCase);
-            if (hitOffset < 0) {
-                break;
-            }
-
-            hits.Add(new PagerSearchHit(renderableIndex, hitOffset, normalizedQuery.Length, 0, hitOffset));
-            searchStart = hitOffset + Math.Max(1, normalizedQuery.Length);
-        }
-
-        return hits;
-    }
-
-    private string GetSearchTextForHighlight(int renderableIndex, IRenderable renderable) {
-        string normalizedEntryText = PagerHighlighting.NormalizeText(_document.GetEntry(renderableIndex)?.SearchText);
-        return normalizedEntryText.Length > 0
-            ? normalizedEntryText
-            : ExtractPlainTextForSearchHighlight(renderable);
-    }
-
-    private string ExtractPlainTextForSearchHighlight(IRenderable renderable) {
-        if (renderable is Text text) {
-            return PagerHighlighting.NormalizeText(text.ToString());
-        }
-
-        try {
-            int width = Math.Max(20, WindowWidth - 2);
-            string rendered = Writer.WriteToString(renderable, width);
-            string normalized = PagerHighlighting.NormalizeText(VTHelpers.StripAnsi(rendered));
-            return normalized.Length > 0
-                ? normalized
-                : PagerHighlighting.NormalizeText(renderable.ToString());
-        }
-        catch (InvalidOperationException) {
-            return PagerHighlighting.NormalizeText(renderable.ToString());
-        }
-        catch (IOException) {
-            return PagerHighlighting.NormalizeText(renderable.ToString());
-        }
-    }
+    private IRenderable ApplySearchHighlight(int renderableIndex, IRenderable renderable)
+        => !_search.HasQuery || !_search.HasHitsForRenderable(renderableIndex)
+            ? renderable
+            : PagerHighlighting.BuildSegmentHighlightRenderable(
+                renderable,
+                _search.Query,
+                SearchRowTextStyle,
+                SearchMatchTextStyle,
+                highlightLinkedLabelsOnNoDirectMatch: true
+            );
 
     private IRenderable BuildFooter(int width, PagerViewportWindow viewport)
         => UseRichFooter(width)
@@ -758,11 +783,7 @@ public sealed class Pager {
                 }
             }
             // Enter interactive loop using the live display context
-            _console.Live(initial)
-            .AutoClear(true)
-            .Overflow(VerticalOverflow.Crop)
-            .Cropping(VerticalOverflowCropping.Bottom)
-            .Start(Navigate);
+            _displayHost.Run(_console, initial, Navigate);
         }
         finally {
             // Clear any active view on the source highlighted text to avoid

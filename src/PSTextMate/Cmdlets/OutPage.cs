@@ -8,6 +8,7 @@ namespace PSTextMate.Commands;
 [OutputType(typeof(void))]
 public sealed class OutPageCmdlet : PSCmdlet {
     private readonly List<IRenderable> _renderables = [];
+    private readonly List<string?> _renderableSourceLines = [];
     private readonly List<object> _outStringInputs = [];
     private HighlightedText? _singleHighlightedText;
     private bool _sawNonHighlightedInput;
@@ -41,25 +42,33 @@ public sealed class OutPageCmdlet : PSCmdlet {
                 return;
             }
 
+            PromoteBufferedHighlightedText();
+            FlushPendingOutStringInputs();
             _sawNonHighlightedInput = true;
-            _renderables.AddRange(highlightedText.Renderables);
+            AddHighlightedText(highlightedText);
             return;
         }
 
+        PromoteBufferedHighlightedText();
         _sawNonHighlightedInput = true;
 
         if (value is IRenderable renderable) {
+            FlushPendingOutStringInputs();
             _renderables.Add(renderable);
+            _renderableSourceLines.Add(null);
             return;
         }
 
         if (value is string text) {
-            _outStringInputs.Add(text);
+            FlushPendingOutStringInputs();
+            AddTextInput(text);
             return;
         }
 
         if (TryConvertForeignSpectreRenderable(value, out IRenderable? convertedRenderable)) {
+            FlushPendingOutStringInputs();
             _renderables.Add(convertedRenderable);
+            _renderableSourceLines.Add(null);
             return;
         }
 
@@ -73,28 +82,77 @@ public sealed class OutPageCmdlet : PSCmdlet {
             return;
         }
 
-        if (_outStringInputs.Count > 0) {
-            List<string> formattedLines = ConvertWithOutStringLines(_outStringInputs);
-            if (formattedLines.Count > 0) {
-                foreach (string line in formattedLines) {
-                    _renderables.Add(line.Length == 0 ? Text.Empty : VTConversion.ToParagraph(line));
-                }
-
-            }
-            else {
-                foreach (object value in _outStringInputs) {
-                    _renderables.Add(new Text(LanguagePrimitives.ConvertTo<string>(value)));
-                }
-
-            }
-        }
+        FlushPendingOutStringInputs();
 
         if (_renderables.Count == 0) {
             return;
         }
 
-        var pager = new Pager(_renderables, AnsiConsole.Console, null, suppressTerminalControlSequences: false);
+        var pager = new Pager(_renderables, _renderableSourceLines, AnsiConsole.Console, null, suppressTerminalControlSequences: false);
         pager.Show();
+    }
+
+    private void PromoteBufferedHighlightedText() {
+        if (_singleHighlightedText is null) {
+            return;
+        }
+
+        AddHighlightedText(_singleHighlightedText);
+        _singleHighlightedText = null;
+    }
+
+    private void AddHighlightedText(HighlightedText highlightedText) {
+        _renderables.AddRange(highlightedText.Renderables);
+
+        IReadOnlyList<string>? sourceLines = highlightedText.SourceLines;
+        if (sourceLines is not null && sourceLines.Count == highlightedText.Renderables.Length) {
+            for (int i = 0; i < sourceLines.Count; i++) {
+                _renderableSourceLines.Add(sourceLines[i]);
+            }
+
+            return;
+        }
+
+        AddSourceLinePlaceholders(highlightedText.Renderables.Length);
+    }
+
+    private void AddSourceLinePlaceholders(int count) {
+        for (int i = 0; i < count; i++) {
+            _renderableSourceLines.Add(null);
+        }
+    }
+
+    private void AddTextInput(string text) {
+        var lines = new List<string>(Math.Min(16, (text.Length / 8) + 1));
+        TextMateHelper.AddSplitLines(lines, text, trimTrailingTerminatorEmptyLine: true);
+
+        foreach (string line in lines) {
+            _renderables.Add(line.Length == 0 ? Text.Empty : VTConversion.ToParagraph(line));
+            _renderableSourceLines.Add(line);
+        }
+    }
+
+    private void FlushPendingOutStringInputs() {
+        if (_outStringInputs.Count == 0) {
+            return;
+        }
+
+        List<string> formattedLines = ConvertWithOutStringLines(_outStringInputs);
+        if (formattedLines.Count > 0) {
+            foreach (string line in formattedLines) {
+                _renderables.Add(line.Length == 0 ? Text.Empty : VTConversion.ToParagraph(line));
+                _renderableSourceLines.Add(line);
+            }
+        }
+        else {
+            foreach (object value in _outStringInputs) {
+                string converted = LanguagePrimitives.ConvertTo<string>(value);
+                _renderables.Add(new Text(converted));
+                _renderableSourceLines.Add(converted);
+            }
+        }
+
+        _outStringInputs.Clear();
     }
 
     private static List<string> ConvertWithOutStringLines(List<object> values) {

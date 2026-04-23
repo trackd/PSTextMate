@@ -5,6 +5,7 @@ internal readonly record struct PagerViewportWindow(int Top, int Count, int EndE
 internal sealed class PagerViewportEngine {
     private readonly IReadOnlyList<IRenderable> _renderables;
     private readonly HighlightedText? _sourceHighlightedText;
+    private readonly bool _containsImages;
     private List<int> _renderableHeights = [];
     private int _lastWidth = -1;
     private int _lastContentRows = -1;
@@ -14,15 +15,16 @@ internal sealed class PagerViewportEngine {
     public PagerViewportEngine(IReadOnlyList<IRenderable> renderables, HighlightedText? sourceHighlightedText) {
         _renderables = renderables ?? throw new ArgumentNullException(nameof(renderables));
         _sourceHighlightedText = sourceHighlightedText;
+        _containsImages = renderables.Any(IsImageRenderable);
     }
 
     public void RecalculateHeights(int width, int contentRows, int windowHeight, IAnsiConsole console) {
         ArgumentNullException.ThrowIfNull(console);
 
+        bool layoutAffectsMeasurement = _containsImages;
         if (_renderableHeights.Count == _renderables.Count
             && _lastWidth == width
-            && _lastContentRows == contentRows
-            && _lastWindowHeight == windowHeight
+            && (!layoutAffectsMeasurement || (_lastContentRows == contentRows && _lastWindowHeight == windowHeight))
             && _lastRenderableCount == _renderables.Count) {
             return;
         }

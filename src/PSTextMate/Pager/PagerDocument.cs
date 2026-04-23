@@ -1,81 +1,49 @@
 ﻿namespace PSTextMate.Terminal;
 
-internal sealed record PagerDocumentEntry(
-    int RenderableIndex,
-    IRenderable Renderable,
-    Func<string> GetSearchText,
-    Func<int[]> GetLineStarts,
-    bool IsImage
-) {
-    public string SearchText => GetSearchText();
-
-    public int[] LineStarts => GetLineStarts();
-}
-
-internal sealed partial class PagerDocument {
-    private readonly List<PagerDocumentEntry> _entries = [];
+internal sealed partial class PagerDocumentEntry {
+    private readonly string? _sourceLine;
+    private string? _searchText;
+    private int[]? _lineStarts;
     private static readonly Regex s_hyperlinkTargetRegex = HyperlinkTargetRegex();
 
-    public IReadOnlyList<PagerDocumentEntry> Entries => _entries;
+    public int RenderableIndex { get; }
 
-    public IReadOnlyList<IRenderable> Renderables { get; private set; } = [];
+    public IRenderable Renderable { get; }
 
-    public PagerDocument(IEnumerable<IRenderable> renderables) {
-        Initialize(renderables, sourceLines: null);
+    public bool IsImage { get; }
+
+    public string SearchText
+        => _searchText ??= BuildSearchText(_sourceLine, Renderable, IsImage);
+
+    public int[] LineStarts
+        => _lineStarts ??= BuildLineStarts(SearchText);
+
+    public PagerDocumentEntry(int renderableIndex, IRenderable renderable, string? sourceLine, bool isImage) {
+        RenderableIndex = renderableIndex;
+        Renderable = renderable;
+        _sourceLine = sourceLine;
+        IsImage = isImage;
     }
 
-    private PagerDocument(IEnumerable<IRenderable> renderables, IReadOnlyList<string>? sourceLines) {
-        Initialize(renderables, sourceLines);
+    private static string BuildSearchText(string? sourceLine, IRenderable renderable, bool isImage) {
+        if (isImage) return string.Empty;
+
+        return sourceLine is not null
+            ? ExtractSearchTextFromSourceLine(sourceLine)
+            : ExtractSearchText(renderable);
     }
 
-    private void Initialize(IEnumerable<IRenderable> renderables, IReadOnlyList<string>? sourceLines) {
-        ArgumentNullException.ThrowIfNull(renderables);
+    private static string ExtractSearchTextFromSourceLine(string sourceLine) {
+        string visibleText = Normalize(VTHelpers.StripAnsi(sourceLine));
+        string hyperlinkTargets = ExtractHyperlinkTargets(sourceLine);
 
-        var renderableList = new List<IRenderable>();
-        int index = 0;
-        foreach (IRenderable renderable in renderables) {
-            int entryIndex = index;
-            bool isImage = IsImageRenderable(renderable);
-            Lazy<string> lazySearchText = new(
-                () => isImage
-                    ? string.Empty
-                    : sourceLines is not null
-                    ? Normalize(sourceLines[entryIndex])
-                    : ExtractSearchText(renderable),
-                isThreadSafe: false
-            );
-            Lazy<int[]> lazyLineStarts = new(
-                () => BuildLineStarts(lazySearchText.Value),
-                isThreadSafe: false
-            );
-
-            _entries.Add(new PagerDocumentEntry(
-                index,
-                renderable,
-                () => lazySearchText.Value,
-                () => lazyLineStarts.Value,
-                isImage
-            ));
-            renderableList.Add(renderable);
-            index++;
+        if (!string.IsNullOrEmpty(hyperlinkTargets)) {
+            return string.IsNullOrEmpty(visibleText)
+                ? hyperlinkTargets
+                : $"{visibleText}\n{hyperlinkTargets}";
         }
 
-        Renderables = renderableList;
-    }
-
-    public static PagerDocument FromHighlightedText(HighlightedText highlightedText) {
-        ArgumentNullException.ThrowIfNull(highlightedText);
-
-        IReadOnlyList<string>? sourceLines = highlightedText.SourceLines;
-        return sourceLines is not null && sourceLines.Count == highlightedText.Renderables.Length
-            ? new PagerDocument(highlightedText.Renderables, sourceLines)
-            : new PagerDocument(highlightedText.Renderables);
-    }
-
-    public PagerDocumentEntry? GetEntry(int renderableIndex) {
-        return renderableIndex < 0 || renderableIndex >= _entries.Count
-            ? null
-            : _entries[renderableIndex];
+        return visibleText;
     }
 
     private static string ExtractSearchText(IRenderable renderable) {
@@ -188,6 +156,54 @@ internal sealed partial class PagerDocument {
         }
 
         return [.. starts];
+    }
+}
+
+internal sealed class PagerDocument {
+    private readonly List<PagerDocumentEntry> _entries = [];
+
+    public IReadOnlyList<PagerDocumentEntry> Entries => _entries;
+
+    public IReadOnlyList<IRenderable> Renderables { get; }
+
+    public PagerDocument(IEnumerable<IRenderable> renderables)
+        : this(renderables, sourceLines: null) {
+    }
+
+    internal PagerDocument(IEnumerable<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
+        ArgumentNullException.ThrowIfNull(renderables);
+
+        IReadOnlyList<IRenderable> renderableList = renderables as IReadOnlyList<IRenderable> ?? [.. renderables];
+        if (sourceLines is not null && sourceLines.Count != renderableList.Count) {
+            throw new ArgumentException("Source lines must align with renderables.", nameof(sourceLines));
+        }
+
+        Renderables = renderableList;
+        Initialize(renderableList, sourceLines);
+    }
+
+    private void Initialize(IReadOnlyList<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
+        for (int index = 0; index < renderables.Count; index++) {
+            IRenderable renderable = renderables[index];
+            bool isImage = IsImageRenderable(renderable);
+            string? sourceLine = sourceLines?[index];
+            _entries.Add(new PagerDocumentEntry(index, renderable, sourceLine, isImage));
+        }
+    }
+
+    public static PagerDocument FromHighlightedText(HighlightedText highlightedText) {
+        ArgumentNullException.ThrowIfNull(highlightedText);
+
+        IReadOnlyList<string>? sourceLines = highlightedText.SourceLines;
+        return sourceLines is not null && sourceLines.Count == highlightedText.Renderables.Length
+            ? new PagerDocument(highlightedText.Renderables, sourceLines)
+            : new PagerDocument(highlightedText.Renderables);
+    }
+
+    public PagerDocumentEntry? GetEntry(int renderableIndex) {
+        return renderableIndex < 0 || renderableIndex >= _entries.Count
+            ? null
+            : _entries[renderableIndex];
     }
 
     private static bool IsImageRenderable(IRenderable renderable) {

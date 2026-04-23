@@ -3,6 +3,7 @@ using PSTextMate.Terminal;
 using PSTextMate.Utilities;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using Spectre.Console.Testing;
 using Xunit;
 
 namespace PSTextMate.InteractiveTests;
@@ -106,6 +107,19 @@ public sealed class PagerCoreTests {
     }
 
     [Fact]
+    public void SetQuery_FromProvidedSourceLines_DoesNotRenderRenderable() {
+        var renderable = new CountingRenderable("ignored render text");
+
+        PagerDocument document = new([renderable], sourceLines: ["search target"]);
+        PagerSearchSession session = new(document);
+
+        session.SetQuery("target");
+
+        Assert.Equal(0, renderable.RenderCallCount);
+        Assert.Equal(1, session.HitCount);
+    }
+
+    [Fact]
     public void SetQuery_RenderableWithEmptyWriterOutput_DoesNotMatch() {
         PagerDocument document = new([
             new EmptyRenderable("delta epsilon")
@@ -153,6 +167,23 @@ public sealed class PagerCoreTests {
         int thirdPassRenders = first.RenderCallCount + second.RenderCallCount;
 
         Assert.True(thirdPassRenders > secondPassRenders);
+    }
+
+    [Fact]
+    public void RecalculateHeights_DifferentViewportWithoutImages_DoesNotRecomputeRenderHeights() {
+        var first = new CountingRenderable("alpha");
+        var second = new CountingRenderable("beta");
+        IReadOnlyList<IRenderable> renderables = [first, second];
+
+        PagerViewportEngine engine = new(renderables, sourceHighlightedText: null);
+
+        engine.RecalculateHeights(width: 80, contentRows: 20, windowHeight: 40, AnsiConsole.Console);
+        int firstPassRenders = first.RenderCallCount + second.RenderCallCount;
+
+        engine.RecalculateHeights(width: 80, contentRows: 17, windowHeight: 37, AnsiConsole.Console);
+        int secondPassRenders = first.RenderCallCount + second.RenderCallCount;
+
+        Assert.Equal(firstPassRenders, secondPassRenders);
     }
 
     [Fact]
@@ -281,6 +312,54 @@ public sealed class PagerCoreTests {
         Assert.True(borderKeptOriginalStyle);
     }
 
+    [Fact]
+    public void Show_WithCustomDisplayHost_UsesHostAbstraction() {
+        var console = new TestConsole();
+        var keys = new Queue<ConsoleKeyInfo>([
+            new ConsoleKeyInfo('j', ConsoleKey.J, false, false, false),
+            new ConsoleKeyInfo('q', ConsoleKey.Q, false, false, false)
+        ]);
+        var host = new RecordingPagerDisplayHost();
+
+        var pager = new Pager(
+            [new Text("alpha"), new Text("beta")],
+            console,
+            () => keys.Count > 0 ? keys.Dequeue() : null,
+            suppressTerminalControlSequences: true,
+            displayHost: host
+        );
+
+        pager.Show();
+
+        Assert.True(host.WasRun);
+        Assert.NotNull(host.InitialTarget);
+        Assert.True(host.UpdateTargetCount > 0);
+    }
+
+    [Fact]
+    public void DirectAnsiPagerDisplayHost_Run_CanRefreshAndUpdateTarget() {
+        var console = new TestConsole();
+
+        DirectAnsiPagerDisplayHost.Instance.Run(console, new Markup("start"), context => {
+            context.Refresh();
+            context.UpdateTarget(new Markup("end"));
+        });
+
+        Assert.Contains("end", console.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DirectAnsiPagerDisplayHost_Run_ClearsViewportOnlyOnFirstRefresh() {
+        var console = new TestConsole();
+
+        DirectAnsiPagerDisplayHost.Instance.Run(console, new Markup("start"), context => {
+            context.Refresh();
+            context.UpdateTarget(new Markup("end"));
+        });
+
+        Assert.Equal(1, CountOccurrences(console.Output, "\x1b[2J"));
+    }
+
     private sealed class Osc8Renderable : IRenderable {
         private readonly string _label;
         private readonly string _url;
@@ -300,6 +379,53 @@ public sealed class PagerCoreTests {
             string osc8 = $"{esc}]8;;{_url}{esc}\\{_label}{esc}]8;;{esc}\\";
             return [new Segment(osc8, Style.Plain)];
         }
+    }
+
+    private sealed class RecordingPagerDisplayHost : IPagerDisplayHost {
+        public bool RefreshReplacesViewport => false;
+
+        public bool WasRun { get; private set; }
+
+        public IRenderable? InitialTarget { get; private set; }
+
+        public int UpdateTargetCount { get; private set; }
+
+        public void Run(IAnsiConsole console, IRenderable initialTarget, Action<IPagerDisplayContext> action) {
+            WasRun = true;
+            InitialTarget = initialTarget;
+            action(new RecordingPagerDisplayContext(this));
+        }
+
+        private sealed class RecordingPagerDisplayContext : IPagerDisplayContext {
+            private readonly RecordingPagerDisplayHost _owner;
+
+            public RecordingPagerDisplayContext(RecordingPagerDisplayHost owner) {
+                _owner = owner;
+            }
+
+            public void UpdateTarget(IRenderable target) {
+                ArgumentNullException.ThrowIfNull(target);
+                _owner.UpdateTargetCount++;
+            }
+
+            public void Refresh() {
+            }
+        }
+    }
+
+    private static int CountOccurrences(string value, string needle) {
+        if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(needle)) {
+            return 0;
+        }
+
+        int count = 0;
+        int index = 0;
+        while ((index = value.IndexOf(needle, index, StringComparison.Ordinal)) >= 0) {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
     }
 
     private sealed class ThrowingRenderable : IRenderable {

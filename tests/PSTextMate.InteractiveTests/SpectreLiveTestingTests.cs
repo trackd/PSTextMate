@@ -1,5 +1,6 @@
 ﻿using PSTextMate.Terminal;
 using PSTextMate.Utilities;
+using PSTextMate.Core;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using Spectre.Console.Testing;
@@ -63,11 +64,32 @@ public sealed class SpectreLiveTestingTests {
     }
 
     [Fact]
+    public void Pager_RenderableLineSlice_ExposesLaterLinesForTallPanel() {
+        var panelRows = new Rows(
+            Enumerable.Range(1, 60).Select(index => (IRenderable)new Text($"line {index:00}"))
+        );
+
+        IRenderable slice = new Pager.RenderableLineSlice(panelRows, startLine: 50, lineCount: 10);
+
+        string rendered = Writer.WriteToString(slice, width: 80);
+
+        Assert.Contains("line 60", rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("line 01", rendered, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TokenProcessor_NormalizeTabsForRendering_ReplacesTabsWithSpaces() {
+        string normalized = TokenProcessor.NormalizeTabsForRendering("\tparam(\t[string]$Name)");
+
+        Assert.DoesNotContain("\t", normalized, StringComparison.Ordinal);
+        Assert.Contains("    param(    [string]$Name)", normalized, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Pager_Show_WithReportedSample_DoesNotDuplicateFooterInTestConsole() {
-        string samplePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "testoutput.txt"));
-        string sample = File.ReadAllText(samplePath);
-        var lines = new List<string>();
-        TextMateHelper.AddSplitLines(lines, sample, trimTrailingTerminatorEmptyLine: true);
+        var lines = Enumerable.Range(1, 27)
+            .Select(index => $"line {index:00}")
+            .ToList();
 
         var renderables = lines
             .Select(static line => (IRenderable)(line.Length == 0 ? Text.Empty : VTConversion.ToParagraph(line)))

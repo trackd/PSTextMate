@@ -5,7 +5,7 @@ internal readonly record struct PagerViewportWindow(int Top, int Count, int EndE
 internal sealed class PagerViewportEngine {
     private readonly IReadOnlyList<IRenderable> _renderables;
     private readonly HighlightedText? _sourceHighlightedText;
-    private readonly bool _containsImages;
+    private bool _containsImages;
     private List<int> _renderableHeights = [];
     private int _lastWidth = -1;
     private int _lastContentRows = -1;
@@ -16,6 +16,14 @@ internal sealed class PagerViewportEngine {
         _renderables = renderables ?? throw new ArgumentNullException(nameof(renderables));
         _sourceHighlightedText = sourceHighlightedText;
         _containsImages = renderables.Any(IsImageRenderable);
+    }
+
+    public void NoteRenderableAppended(IRenderable renderable) {
+        ArgumentNullException.ThrowIfNull(renderable);
+
+        if (IsImageRenderable(renderable)) {
+            _containsImages = true;
+        }
     }
 
     public void RecalculateHeights(int width, int contentRows, int windowHeight, IAnsiConsole console) {
@@ -32,9 +40,9 @@ internal sealed class PagerViewportEngine {
         _renderableHeights = new List<int>(_renderables.Count);
         Capabilities capabilities = console.Profile.Capabilities;
         int measurementHeight = windowHeight > 0 ? windowHeight : Math.Max(1, contentRows + 3);
-        var size = new Size(width, measurementHeight);
-        var options = new RenderOptions(capabilities, size);
         int contentWidth = GetRenderableContentWidth(width);
+        var size = new Size(contentWidth, measurementHeight);
+        var options = new RenderOptions(capabilities, size);
 
         for (int i = 0; i < _renderables.Count; i++) {
             IRenderable? renderable = _renderables[i];
@@ -170,7 +178,13 @@ internal sealed class PagerViewportEngine {
         return Math.Clamp(nextTop, 0, _renderables.Count - 1);
     }
 
+    public int GetRenderableHeightAt(int index)
+        => GetRenderableHeightCore(index);
+
     private int GetRenderableHeight(int index)
+        => GetRenderableHeightCore(index);
+
+    private int GetRenderableHeightCore(int index)
         => index < 0 || index >= _renderableHeights.Count ? 1 : Math.Max(1, _renderableHeights[index]);
 
     private bool IsImageRenderable(IRenderable? renderable) {

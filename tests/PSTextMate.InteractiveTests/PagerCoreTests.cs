@@ -148,6 +148,37 @@ public sealed class PagerCoreTests {
     }
 
     [Fact]
+    public void Append_WithSourceLine_AddsSearchableEntry() {
+        PagerDocument document = new([]);
+
+        document.Append(new CountingRenderable("ignored render text"), "stream target");
+
+        Assert.Single(document.Renderables);
+
+        PagerSearchSession session = new(document);
+        session.SetQuery("target");
+
+        Assert.Equal(1, session.HitCount);
+    }
+
+    [Fact]
+    public void AppendPendingEntries_WithActiveQuery_IndexesAppendedEntries() {
+        PagerDocument document = new([
+            new Text("alpha")
+        ]);
+        PagerSearchSession session = new(document);
+
+        session.SetQuery("beta");
+        Assert.Equal(0, session.HitCount);
+
+        document.Append(new Text("beta gamma"), sourceLine: null);
+        session.AppendPendingEntries();
+
+        Assert.Equal(1, session.HitCount);
+        Assert.True(session.HasHitsForRenderable(1));
+    }
+
+    [Fact]
     public void RecalculateHeights_SameLayout_DoesNotRecomputeRenderHeights() {
         var first = new CountingRenderable("alpha");
         var second = new CountingRenderable("beta");
@@ -312,54 +343,6 @@ public sealed class PagerCoreTests {
         Assert.True(borderKeptOriginalStyle);
     }
 
-    [Fact]
-    public void Show_WithCustomDisplayHost_UsesHostAbstraction() {
-        var console = new TestConsole();
-        var keys = new Queue<ConsoleKeyInfo>([
-            new ConsoleKeyInfo('j', ConsoleKey.J, false, false, false),
-            new ConsoleKeyInfo('q', ConsoleKey.Q, false, false, false)
-        ]);
-        var host = new RecordingPagerDisplayHost();
-
-        var pager = new Pager(
-            [new Text("alpha"), new Text("beta")],
-            console,
-            () => keys.Count > 0 ? keys.Dequeue() : null,
-            suppressTerminalControlSequences: true,
-            displayHost: host
-        );
-
-        pager.Show();
-
-        Assert.True(host.WasRun);
-        Assert.NotNull(host.InitialTarget);
-        Assert.True(host.UpdateTargetCount > 0);
-    }
-
-    [Fact]
-    public void DirectAnsiPagerDisplayHost_Run_CanRefreshAndUpdateTarget() {
-        var console = new TestConsole();
-
-        DirectAnsiPagerDisplayHost.Instance.Run(console, new Markup("start"), context => {
-            context.Refresh();
-            context.UpdateTarget(new Markup("end"));
-        });
-
-        Assert.Contains("end", console.Output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void DirectAnsiPagerDisplayHost_Run_ClearsViewportOnlyOnFirstRefresh() {
-        var console = new TestConsole();
-
-        DirectAnsiPagerDisplayHost.Instance.Run(console, new Markup("start"), context => {
-            context.Refresh();
-            context.UpdateTarget(new Markup("end"));
-        });
-
-        Assert.Equal(1, CountOccurrences(console.Output, "\x1b[2J"));
-    }
-
     private sealed class Osc8Renderable : IRenderable {
         private readonly string _label;
         private readonly string _url;
@@ -378,38 +361,6 @@ public sealed class PagerCoreTests {
             string esc = "\x1b";
             string osc8 = $"{esc}]8;;{_url}{esc}\\{_label}{esc}]8;;{esc}\\";
             return [new Segment(osc8, Style.Plain)];
-        }
-    }
-
-    private sealed class RecordingPagerDisplayHost : IPagerDisplayHost {
-        public bool RefreshReplacesViewport => false;
-
-        public bool WasRun { get; private set; }
-
-        public IRenderable? InitialTarget { get; private set; }
-
-        public int UpdateTargetCount { get; private set; }
-
-        public void Run(IAnsiConsole console, IRenderable initialTarget, Action<IPagerDisplayContext> action) {
-            WasRun = true;
-            InitialTarget = initialTarget;
-            action(new RecordingPagerDisplayContext(this));
-        }
-
-        private sealed class RecordingPagerDisplayContext : IPagerDisplayContext {
-            private readonly RecordingPagerDisplayHost _owner;
-
-            public RecordingPagerDisplayContext(RecordingPagerDisplayHost owner) {
-                _owner = owner;
-            }
-
-            public void UpdateTarget(IRenderable target) {
-                ArgumentNullException.ThrowIfNull(target);
-                _owner.UpdateTargetCount++;
-            }
-
-            public void Refresh() {
-            }
         }
     }
 

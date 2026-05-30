@@ -25,25 +25,22 @@ internal sealed partial class PagerDocumentEntry {
         IsImage = isImage;
     }
 
-    private static string BuildSearchText(string? sourceLine, IRenderable renderable, bool isImage) {
-        if (isImage) return string.Empty;
-
-        return sourceLine is not null
+    private static string BuildSearchText(string? sourceLine, IRenderable renderable, bool isImage)
+        => isImage
+            ? string.Empty
+            : sourceLine is not null
             ? ExtractSearchTextFromSourceLine(sourceLine)
             : ExtractSearchText(renderable);
-    }
 
     private static string ExtractSearchTextFromSourceLine(string sourceLine) {
         string visibleText = Normalize(VTHelpers.StripAnsi(sourceLine));
         string hyperlinkTargets = ExtractHyperlinkTargets(sourceLine);
 
-        if (!string.IsNullOrEmpty(hyperlinkTargets)) {
-            return string.IsNullOrEmpty(visibleText)
+        return !string.IsNullOrEmpty(hyperlinkTargets)
+            ? string.IsNullOrEmpty(visibleText)
                 ? hyperlinkTargets
-                : $"{visibleText}\n{hyperlinkTargets}";
-        }
-
-        return visibleText;
+                : $"{visibleText}\n{hyperlinkTargets}"
+            : visibleText;
     }
 
     private static string ExtractSearchText(IRenderable renderable) {
@@ -160,11 +157,14 @@ internal sealed partial class PagerDocumentEntry {
 }
 
 internal sealed class PagerDocument {
+    private readonly List<IRenderable> _renderables;
     private readonly List<PagerDocumentEntry> _entries = [];
 
     public IReadOnlyList<PagerDocumentEntry> Entries => _entries;
 
-    public IReadOnlyList<IRenderable> Renderables { get; }
+    public IReadOnlyList<IRenderable> Renderables => _renderables;
+
+    public int Count => _entries.Count;
 
     public PagerDocument(IEnumerable<IRenderable> renderables)
         : this(renderables, sourceLines: null) {
@@ -173,16 +173,15 @@ internal sealed class PagerDocument {
     internal PagerDocument(IEnumerable<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
         ArgumentNullException.ThrowIfNull(renderables);
 
-        IReadOnlyList<IRenderable> renderableList = renderables as IReadOnlyList<IRenderable> ?? [.. renderables];
-        if (sourceLines is not null && sourceLines.Count != renderableList.Count) {
+        _renderables = [.. renderables];
+        if (sourceLines is not null && sourceLines.Count != _renderables.Count) {
             throw new ArgumentException("Source lines must align with renderables.", nameof(sourceLines));
         }
 
-        Renderables = renderableList;
-        Initialize(renderableList, sourceLines);
+        Initialize(_renderables, sourceLines);
     }
 
-    private void Initialize(IReadOnlyList<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
+    private void Initialize(List<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
         for (int index = 0; index < renderables.Count; index++) {
             IRenderable renderable = renderables[index];
             bool isImage = IsImageRenderable(renderable);
@@ -204,6 +203,25 @@ internal sealed class PagerDocument {
         return renderableIndex < 0 || renderableIndex >= _entries.Count
             ? null
             : _entries[renderableIndex];
+    }
+
+    internal void Append(IRenderable renderable, string? sourceLine) {
+        ArgumentNullException.ThrowIfNull(renderable);
+
+        _renderables.Add(renderable);
+        _entries.Add(new PagerDocumentEntry(_entries.Count, renderable, sourceLine, IsImageRenderable(renderable)));
+    }
+
+    internal void AppendRange(IReadOnlyList<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
+        ArgumentNullException.ThrowIfNull(renderables);
+
+        if (sourceLines is not null && sourceLines.Count != renderables.Count) {
+            throw new ArgumentException("Source lines must align with renderables.", nameof(sourceLines));
+        }
+
+        for (int index = 0; index < renderables.Count; index++) {
+            Append(renderables[index], sourceLines?[index]);
+        }
     }
 
     private static bool IsImageRenderable(IRenderable renderable) {

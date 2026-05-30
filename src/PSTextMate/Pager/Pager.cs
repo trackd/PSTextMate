@@ -1,7 +1,7 @@
 namespace PSTextMate.Terminal;
 
 /// <summary>
-/// Simple interactive pager with a pluggable display host.
+/// Simple interactive pager implemented with Spectre.Console Live display.
 /// Interaction keys:
 /// - Up/Down or j/k: move one renderable item
 /// - PageUp/PageDown/Space or h/l: move by one viewport of items
@@ -15,8 +15,8 @@ namespace PSTextMate.Terminal;
 public sealed class Pager {
     private static readonly PagerExclusivityMode s_pagerExclusivityMode = new();
     private static readonly Panel s_helpOverlayPanel = CreateHelpOverlayPanel();
+    private readonly object _stateLock = new();
     private readonly IAnsiConsole _console;
-    private readonly IPagerDisplayHost _displayHost;
     private readonly Func<ConsoleKeyInfo?>? _tryReadKeyOverride;
     private readonly bool _suppressTerminalControlSequences;
     private readonly IReadOnlyList<IRenderable> _renderables;
@@ -33,6 +33,7 @@ public sealed class Pager {
     private int WindowWidth;
     private int _lastRenderedRows;
     private bool _lastPageHadImages;
+    private int _singleRenderableLineOffset;
     private string _searchStatusText = string.Empty;
     private bool _isSearchInputActive;
     private bool _isHelpOverlayActive;
@@ -41,17 +42,9 @@ public sealed class Pager {
     private static readonly Style SearchMatchTextStyle = new(Color.Black, Color.Orange1);
     private const int KeyPollingIntervalMs = 50;
     private const int MaxSearchQueryLength = 256;
-
-    private static IPagerDisplayHost GetDefaultDisplayHost(bool suppressTerminalControlSequences, PagerDocument document, IAnsiConsole console) {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(console);
-
-        return suppressTerminalControlSequences
-            || !console.Profile.Capabilities.Ansi
-            || document.Entries.Any(static entry => entry.IsImage)
-            ? SpectreLivePagerDisplayHost.Instance
-            : DirectAnsiPagerDisplayHost.Instance;
-    }
+    private int _contentVersion;
+    private int _lastPublishedContentVersion = -1;
+    private bool _exitRequested;
 
     private bool TryReadKey(out ConsoleKeyInfo key) {
         if (_tryReadKeyOverride is not null) {
@@ -127,6 +120,7 @@ public sealed class Pager {
             lock (_syncRoot) {
                 task = func();
             }
+
             return await task.ConfigureAwait(false);
         }
     }
@@ -187,6 +181,41 @@ public sealed class Pager {
             => Math.Clamp(_start + _count, _start, _source.Count);
     }
 
+    internal sealed class RenderableLineSlice : Renderable {
+        private readonly IRenderable _source;
+        private readonly int _startLine;
+        private readonly int _lineCount;
+
+        public RenderableLineSlice(IRenderable source, int startLine, int lineCount) {
+            _source = source ?? throw new ArgumentNullException(nameof(source));
+            _startLine = Math.Max(0, startLine);
+            _lineCount = Math.Max(0, lineCount);
+        }
+
+        protected override Measurement Measure(RenderOptions options, int maxWidth)
+            => _source.Measure(options, maxWidth);
+
+        protected override IEnumerable<Segment> Render(RenderOptions options, int maxWidth) {
+            List<SegmentLine> lines = Segment.SplitLines(_source.Render(options, maxWidth), Math.Max(1, maxWidth));
+            if (lines.Count == 0) {
+                yield break;
+            }
+
+            int begin = Math.Clamp(_startLine, 0, lines.Count);
+            int end = Math.Clamp(begin + _lineCount, begin, lines.Count);
+
+            for (int lineIndex = begin; lineIndex < end; lineIndex++) {
+                foreach (Segment segment in lines[lineIndex]) {
+                    yield return segment;
+                }
+
+                if (lineIndex + 1 < end) {
+                    yield return Segment.LineBreak;
+                }
+            }
+        }
+    }
+
 
     public Pager(HighlightedText highlightedText) {
         _console = AnsiConsole.Console;
@@ -201,7 +230,6 @@ public sealed class Pager {
         _originalLineNumberWidth = highlightedText.LineNumberWidth;
 
         _document = PagerDocument.FromHighlightedText(highlightedText);
-        _displayHost = GetDefaultDisplayHost(_suppressTerminalControlSequences, _document, _console);
         _renderables = _document.Renderables;
         _search = new PagerSearchSession(_document);
         _viewportEngine = new PagerViewportEngine(_renderables, _sourceHighlightedText);
@@ -218,14 +246,12 @@ public sealed class Pager {
         IReadOnlyList<string?>? sourceLines,
         IAnsiConsole console,
         Func<ConsoleKeyInfo?>? tryReadKeyOverride = null,
-        bool suppressTerminalControlSequences = false,
-        IPagerDisplayHost? displayHost = null
+        bool suppressTerminalControlSequences = false
     ) {
         _console = console ?? throw new ArgumentNullException(nameof(console));
         _tryReadKeyOverride = tryReadKeyOverride;
         _suppressTerminalControlSequences = suppressTerminalControlSequences;
         _document = new PagerDocument(renderables ?? [], sourceLines);
-        _displayHost = displayHost ?? GetDefaultDisplayHost(_suppressTerminalControlSequences, _document, _console);
         _renderables = _document.Renderables;
         _search = new PagerSearchSession(_document);
         _viewportEngine = new PagerViewportEngine(_renderables, _sourceHighlightedText);
@@ -237,18 +263,23 @@ public sealed class Pager {
         IEnumerable<IRenderable> renderables,
         IAnsiConsole console,
         Func<ConsoleKeyInfo?>? tryReadKeyOverride = null,
-        bool suppressTerminalControlSequences = false,
-        IPagerDisplayHost? displayHost = null
+        bool suppressTerminalControlSequences = false
     )
-        : this(renderables, sourceLines: null, console, tryReadKeyOverride, suppressTerminalControlSequences, displayHost) {
+        : this(renderables, sourceLines: null, console, tryReadKeyOverride, suppressTerminalControlSequences) {
     }
 
-    private void Navigate(IPagerDisplayContext ctx) {
+    private void Navigate(LiveDisplayContext ctx) {
         bool running = true;
+        bool useTerminalControlSequences = !_suppressTerminalControlSequences;
         (WindowWidth, WindowHeight) = GetPagerSize();
         bool forceRedraw = false;
+        int lastRenderedContentVersion;
 
-        if (!_suppressTerminalControlSequences) {
+        lock (_stateLock) {
+            lastRenderedContentVersion = _lastPublishedContentVersion;
+        }
+
+        if (useTerminalControlSequences) {
             VTHelpers.BeginSynchronizedOutput();
             try {
                 ctx.Refresh();
@@ -259,6 +290,19 @@ public sealed class Pager {
         }
 
         while (running) {
+            int currentContentVersion;
+            lock (_stateLock) {
+                if (_exitRequested) {
+                    break;
+                }
+
+                currentContentVersion = _contentVersion;
+            }
+
+            if (currentContentVersion != lastRenderedContentVersion) {
+                forceRedraw = true;
+            }
+
             (int width, int pageHeight) = GetPagerSize();
             int footerHeight = GetFooterHeight(width);
             int searchInputHeight = GetSearchInputHeight();
@@ -271,44 +315,60 @@ public sealed class Pager {
                 WindowWidth = width;
                 WindowHeight = pageHeight;
                 forceRedraw = true;
+                _singleRenderableLineOffset = 0;
             }
 
             // Redraw if needed (initial, resize, or after navigation)
             if (resized || forceRedraw) {
-                if (!_suppressTerminalControlSequences) {
+                PagerViewportWindow viewport;
+                IRenderable target;
+                bool fullClear;
+                int publishedContentVersion;
+
+                lock (_stateLock) {
+                    _viewportEngine.RecalculateHeights(width, contentRows, WindowHeight, _console);
+                    _top = Math.Clamp(_top, 0, _viewportEngine.GetMaxTop(contentRows));
+                    viewport = _viewportEngine.BuildViewport(_top, contentRows);
+                    _top = viewport.Top;
+                    if (_renderables.Count != 1 || _viewportEngine.GetRenderableHeightAt(viewport.Top) <= contentRows) {
+                        _singleRenderableLineOffset = 0;
+                    }
+
+                    fullClear = resized || viewport.HasImages || _lastPageHadImages;
+                    target = BuildRenderable(viewport, width, contentRows);
+                    _lastPageHadImages = viewport.HasImages;
+                    publishedContentVersion = _contentVersion;
+                    _lastPublishedContentVersion = publishedContentVersion;
+                }
+
+                if (useTerminalControlSequences) {
                     VTHelpers.BeginSynchronizedOutput();
                 }
 
                 try {
-                    _viewportEngine.RecalculateHeights(width, contentRows, WindowHeight, _console);
-                    _top = Math.Clamp(_top, 0, _viewportEngine.GetMaxTop(contentRows));
-                    PagerViewportWindow viewport = _viewportEngine.BuildViewport(_top, contentRows);
-                    _top = viewport.Top;
-
-                    bool requiresFullClear = viewport.HasImages || _lastPageHadImages;
-                    if (!_suppressTerminalControlSequences && requiresFullClear && !_displayHost.RefreshReplacesViewport) {
+                    if (useTerminalControlSequences) {
                         VTHelpers.ClearScreen();
                     }
 
-                    IRenderable target = BuildRenderable(viewport, width);
                     ctx.UpdateTarget(target);
+                    ctx.Refresh();
 
                     // Clear any stale lines after a terminal shrink.
-                    if (!_suppressTerminalControlSequences && _lastRenderedRows > pageHeight && !_displayHost.RefreshReplacesViewport) {
+                    if (useTerminalControlSequences && _lastRenderedRows > pageHeight) {
                         for (int r = pageHeight + 1; r <= _lastRenderedRows; r++) {
                             VTHelpers.ClearRow(r);
                         }
                     }
-
-                    _lastRenderedRows = pageHeight;
-                    _lastPageHadImages = viewport.HasImages;
-                    forceRedraw = false;
                 }
                 finally {
-                    if (!_suppressTerminalControlSequences) {
+                    if (useTerminalControlSequences) {
                         VTHelpers.EndSynchronizedOutput();
                     }
                 }
+
+                _lastRenderedRows = pageHeight;
+                forceRedraw = false;
+                lastRenderedContentVersion = publishedContentVersion;
             }
 
             // Wait for input, checking for resize while idle.
@@ -317,38 +377,124 @@ public sealed class Pager {
                 continue;
             }
 
+            ProcessKey(key, contentRows, ref running, ref forceRedraw);
+        }
+    }
+
+    internal void Append(IRenderable renderable, string? sourceLine = null) {
+        ArgumentNullException.ThrowIfNull(renderable);
+
+        lock (_stateLock) {
+            _document.Append(renderable, sourceLine);
+            _viewportEngine.NoteRenderableAppended(renderable);
+            _search.AppendPendingEntries();
+            _contentVersion++;
+        }
+    }
+
+    internal void AppendRange(IReadOnlyList<IRenderable> renderables, IReadOnlyList<string?>? sourceLines) {
+        ArgumentNullException.ThrowIfNull(renderables);
+
+        if (renderables.Count == 0) {
+            return;
+        }
+
+        lock (_stateLock) {
+            _document.AppendRange(renderables, sourceLines);
+            for (int index = 0; index < renderables.Count; index++) {
+                _viewportEngine.NoteRenderableAppended(renderables[index]);
+            }
+
+            _search.AppendPendingEntries();
+            _contentVersion++;
+        }
+    }
+
+    internal void RequestExit() {
+        lock (_stateLock) {
+            _exitRequested = true;
+            _contentVersion++;
+        }
+    }
+
+    private (int width, int height) GetPagerSize() {
+        try {
+            int width = Console.WindowWidth > 0
+                ? Console.WindowWidth
+                : _console.Profile.Width > 0
+                    ? _console.Profile.Width
+                    : 80;
+            int height = Console.WindowHeight > 0 ? Console.WindowHeight : 40;
+            return (width, height);
+        }
+        catch (IOException) {
+            return (80, 40);
+        }
+        catch (InvalidOperationException) {
+            return (80, 40);
+        }
+    }
+
+    private void ScrollRenderable(int delta, int contentRows) {
+        if (TryScrollSingleOversizedRenderable(delta)) {
+            return;
+        }
+
+        _top = _viewportEngine.ScrollTop(_top, delta, contentRows);
+    }
+
+    private void PageDown(int contentRows) {
+        if (TryPageScrollSingleOversizedRenderable(contentRows)) {
+            return;
+        }
+
+        _top = _viewportEngine.PageDownTop(_top, contentRows);
+    }
+
+    private void PageUp(int contentRows) {
+        if (TryPageScrollSingleOversizedRenderable(-contentRows)) {
+            return;
+        }
+
+        _top = _viewportEngine.PageUpTop(_top, contentRows);
+    }
+
+    private void GoToTop() => _top = 0;
+
+    private void ProcessKey(ConsoleKeyInfo key, int contentRows, ref bool running, ref bool forceRedraw) {
+        lock (_stateLock) {
+            if (_exitRequested) {
+                running = false;
+                return;
+            }
+
             if (_isSearchInputActive) {
                 HandleSearchInputKey(key, ref forceRedraw);
-                continue;
+                return;
             }
 
             if (_isHelpOverlayActive) {
                 if (key.Key == ConsoleKey.Q) {
                     running = false;
-                    continue;
+                    return;
                 }
 
                 _isHelpOverlayActive = false;
                 forceRedraw = true;
-
-                if (key.Key == ConsoleKey.Escape || key.KeyChar == '?') {
-                    continue;
-                }
-
-                continue;
+                return;
             }
 
             bool isCtrlF = key.Key == ConsoleKey.F && (key.Modifiers & ConsoleModifiers.Control) != 0;
             if (key.KeyChar == '/' || isCtrlF) {
                 BeginSearchInput();
                 forceRedraw = true;
-                continue;
+                return;
             }
 
             if (key.KeyChar == '?') {
                 _isHelpOverlayActive = true;
                 forceRedraw = true;
-                continue;
+                return;
             }
 
             switch (key.Key) {
@@ -405,28 +551,6 @@ public sealed class Pager {
             }
         }
     }
-
-    private static (int width, int height) GetPagerSize() {
-        try {
-            int width = Console.WindowWidth > 0 ? Console.WindowWidth : 80;
-            int height = Console.WindowHeight > 0 ? Console.WindowHeight : 40;
-            return (width, height);
-        }
-        catch (IOException) {
-            return (80, 40);
-        }
-        catch (InvalidOperationException) {
-            return (80, 40);
-        }
-    }
-
-    private void ScrollRenderable(int delta, int contentRows) => _top = _viewportEngine.ScrollTop(_top, delta, contentRows);
-
-    private void PageDown(int contentRows) => _top = _viewportEngine.PageDownTop(_top, contentRows);
-
-    private void PageUp(int contentRows) => _top = _viewportEngine.PageUpTop(_top, contentRows);
-
-    private void GoToTop() => _top = 0;
 
     private void BeginSearchInput() {
         _isSearchInputActive = true;
@@ -535,16 +659,22 @@ public sealed class Pager {
         return $"/{_search.Query} [{current}/{_search.HitCount}] line {line}, col {column}";
     }
 
-    private void GoToEnd(int contentRows) => _top = _viewportEngine.GetMaxTop(contentRows);
+    private void GoToEnd(int contentRows) {
+        if (TryGoToEndSingleOversizedRenderable(contentRows)) {
+            return;
+        }
 
-    private Layout BuildRenderable(PagerViewportWindow viewport, int width) {
+        _top = _viewportEngine.GetMaxTop(contentRows);
+    }
+
+    private Layout BuildRenderable(PagerViewportWindow viewport, int width, int contentRows) {
         int footerHeight = GetFooterHeight(width);
         int searchInputHeight = GetSearchInputHeight();
         IRenderable content = _isHelpOverlayActive
             ? BuildHelpOverlayPanel()
             : viewport.Count <= 0
                 ? Text.Empty
-                : BuildContentRenderable(viewport);
+                : BuildContentRenderable(viewport, contentRows);
 
         IRenderable footer = BuildFooter(width, viewport);
         var root = new Layout("root");
@@ -605,24 +735,101 @@ public sealed class Pager {
         };
     }
 
-    private IRenderable BuildContentRenderable(PagerViewportWindow viewport) {
-        if (_sourceHighlightedText is not null) {
-            if (_search.HasQuery) {
-                List<IRenderable> highlightedItems = BuildSearchAwareItems(viewport);
-                _sourceHighlightedText.SetView(highlightedItems, 0, highlightedItems.Count);
+    private IRenderable BuildContentRenderable(PagerViewportWindow viewport, int contentRows) {
+        List<IRenderable> visibleItems = _search.HasQuery
+            ? BuildSearchAwareItems(viewport)
+            : SnapshotViewportItems(viewport);
+
+        if (visibleItems.Count == 1) {
+            int renderableHeight = _viewportEngine.GetRenderableHeightAt(viewport.Top);
+            if (renderableHeight > contentRows) {
+                int maxOffset = renderableHeight - contentRows;
+                int clampedOffset = Math.Clamp(_singleRenderableLineOffset, 0, maxOffset);
+
+                if (_singleRenderableLineOffset != clampedOffset) {
+                    _singleRenderableLineOffset = clampedOffset;
+                }
+
+                return new RenderableLineSlice(visibleItems[0], clampedOffset, contentRows);
             }
-            else {
-                _sourceHighlightedText.SetView(_renderables, viewport.Top, viewport.Count);
-            }
+        }
+
+        if (_sourceHighlightedText is not null && _sourceHighlightedText.ShowLineNumbers) {
+            _sourceHighlightedText.SetView(visibleItems, 0, visibleItems.Count);
 
             _sourceHighlightedText.LineNumberStart = (_originalLineNumberStart ?? 1) + viewport.Top;
             _sourceHighlightedText.LineNumberWidth = _stableLineNumberWidth;
             return _sourceHighlightedText;
         }
 
-        return _search.HasQuery
-            ? BuildSearchAwareContent(viewport)
-            : new RenderableSliceRows(_renderables, viewport.Top, viewport.Count);
+        return new RenderableSliceRows(visibleItems, 0, visibleItems.Count);
+    }
+
+    private bool TryScrollSingleOversizedRenderable(int delta) {
+        if (!IsSingleOversizedRenderable(out int contentRows, out int maxOffset)) {
+            return false;
+        }
+
+        int direction = Math.Sign(delta);
+        if (direction == 0) {
+            return true;
+        }
+
+        _singleRenderableLineOffset = Math.Clamp(_singleRenderableLineOffset + direction, 0, maxOffset);
+        return true;
+    }
+
+    private bool TryPageScrollSingleOversizedRenderable(int delta) {
+        if (!IsSingleOversizedRenderable(out int contentRows, out int maxOffset)) {
+            return false;
+        }
+
+        if (delta == 0) {
+            return true;
+        }
+
+        _singleRenderableLineOffset = Math.Clamp(_singleRenderableLineOffset + delta, 0, maxOffset);
+        return true;
+    }
+
+    private bool TryGoToEndSingleOversizedRenderable(int contentRows) {
+        if (!IsSingleOversizedRenderable(out int actualContentRows, out int maxOffset)) {
+            return false;
+        }
+
+        _singleRenderableLineOffset = maxOffset;
+        return true;
+    }
+
+    private bool IsSingleOversizedRenderable(out int contentRows, out int maxOffset) {
+        contentRows = 0;
+        maxOffset = 0;
+
+        if (_renderables.Count != 1) {
+            return false;
+        }
+
+        (int width, int pageHeight) = GetPagerSize();
+        int footerHeight = GetFooterHeight(width);
+        int searchInputHeight = GetSearchInputHeight();
+        contentRows = Math.Max(1, pageHeight - footerHeight - searchInputHeight);
+
+        int height = _viewportEngine.GetRenderableHeightAt(0);
+        if (height <= contentRows) {
+            return false;
+        }
+
+        maxOffset = height - contentRows;
+        return true;
+    }
+
+    private List<IRenderable> SnapshotViewportItems(PagerViewportWindow viewport) {
+        var items = new List<IRenderable>(viewport.Count);
+        for (int i = 0; i < viewport.Count; i++) {
+            items.Add(_renderables[viewport.Top + i]);
+        }
+
+        return items;
     }
 
     private List<IRenderable> BuildSearchAwareItems(PagerViewportWindow viewport) {
@@ -634,11 +841,6 @@ public sealed class Pager {
         }
 
         return items;
-    }
-
-    private RenderableSliceRows BuildSearchAwareContent(PagerViewportWindow viewport) {
-        List<IRenderable> highlightedItems = BuildSearchAwareItems(viewport);
-        return new RenderableSliceRows(highlightedItems, 0, highlightedItems.Count);
     }
 
     private IRenderable ApplySearchHighlight(int renderableIndex, IRenderable renderable)
@@ -743,7 +945,8 @@ public sealed class Pager {
     }
 
     private void ShowCore() {
-        if (!_suppressTerminalControlSequences) {
+        bool useTerminalControlSequences = !_suppressTerminalControlSequences;
+        if (useTerminalControlSequences) {
             VTHelpers.HideCursor();
             VTHelpers.EnableAlternateScroll();
         }
@@ -757,13 +960,19 @@ public sealed class Pager {
             WindowHeight = pageHeight;
 
             // Initial target for Spectre Live (footer included in target renderable)
-            _console.Profile.Width = width;
-            _viewportEngine.RecalculateHeights(width, contentRows, WindowHeight, _console);
-            PagerViewportWindow initialViewport = _viewportEngine.BuildViewport(_top, contentRows);
-            _top = initialViewport.Top;
-            IRenderable initial = BuildRenderable(initialViewport, width);
-            _lastRenderedRows = pageHeight;
-            _lastPageHadImages = initialViewport.HasImages;
+            PagerViewportWindow initialViewport;
+            IRenderable initial;
+
+            lock (_stateLock) {
+                _console.Profile.Width = width;
+                _viewportEngine.RecalculateHeights(width, contentRows, WindowHeight, _console);
+                initialViewport = _viewportEngine.BuildViewport(_top, contentRows);
+                _top = initialViewport.Top;
+                initial = BuildRenderable(initialViewport, width, contentRows);
+                _lastRenderedRows = pageHeight;
+                _lastPageHadImages = initialViewport.HasImages;
+                _lastPublishedContentVersion = _contentVersion;
+            }
 
             // If the initial page contains images, clear appropriately to ensure safe image rendering
             if (initialViewport.HasImages) {
@@ -783,7 +992,11 @@ public sealed class Pager {
                 }
             }
             // Enter interactive loop using the live display context
-            _displayHost.Run(_console, initial, Navigate);
+            _console.Live(initial)
+                .AutoClear(true)
+                .Overflow(VerticalOverflow.Crop)
+                .Cropping(VerticalOverflowCropping.Bottom)
+                .Start(Navigate);
         }
         finally {
             // Clear any active view on the source highlighted text to avoid
@@ -795,7 +1008,11 @@ public sealed class Pager {
                 _sourceHighlightedText.LineNumberWidth = _originalLineNumberWidth;
             }
 
-            if (!_suppressTerminalControlSequences) {
+            lock (_stateLock) {
+                _exitRequested = true;
+            }
+
+            if (useTerminalControlSequences) {
                 VTHelpers.DisableAlternateScroll();
                 VTHelpers.ShowCursor();
             }

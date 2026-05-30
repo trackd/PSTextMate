@@ -24,6 +24,13 @@ internal sealed class PixelImage : IRenderable {
     public int? MaxWidth { get; set; }
 
     /// <summary>
+    /// Gets or sets the maximum render height in terminal cells.
+    /// When set, the image will be scaled down to fit within this height.
+    /// Takes precedence over the automatic terminal-height clamping.
+    /// </summary>
+    public int? MaxHeight { get; set; }
+
+    /// <summary>
     /// Gets the render width of the canvas. This is hard coded to 1 for sixel images.
     /// </summary>
     public int PixelWidth { get; } = 1;
@@ -52,7 +59,7 @@ internal sealed class PixelImage : IRenderable {
     }
 
     internal SixLabors.ImageSharp.Image<Rgba32> Image { get; private set; }
-    private readonly Dictionary<int, Sixel> _cachedSixels = [];
+    private readonly Dictionary<(int width, int height), Sixel> _cachedSixels = [];
     private int _frameToRender;
 
     public PixelImage(string filename, bool animationDisabled = false) {
@@ -76,22 +83,27 @@ internal sealed class PixelImage : IRenderable {
         // When MaxWidth is explicitly set by the user, use it and don't constrain height.
         // When MaxWidth is not set, constrain the image to the terminal height so tall images
         // don't cause sixel scrolling artifacts.
-        int? maxCellHeight = null;
         if (MaxWidth != null && MaxWidth < maxWidth) {
             maxWidth = MaxWidth.Value;
         }
-        else {
+
+        // Determine height constraint: explicit MaxHeight takes precedence, then fall back
+        // to 1/3 of the terminal height so images don't dominate the screen by default.
+        int? maxCellHeight = MaxHeight;
+        if (maxCellHeight is null) {
             int terminalHeight = Compatibility.GetTerminalHeight();
             if (terminalHeight > 0) {
-                maxCellHeight = terminalHeight - 4; // Leave some room for the prompt and avoid triggering terminal scroll when rendering images that are close to the terminal height.
+                maxCellHeight = Math.Max(1, terminalHeight / 3);
             }
         }
 
         // Write the sixel data as a control segment.
-        // Parsing is expensive, cache the result for the current width.
-        if (!_cachedSixels.TryGetValue(maxWidth, out Sixel sixel)) {
+        // Parsing is expensive, cache the result for the current width + height combination.
+        // Height also affects sixel output (aspect-ratio scaling), so both dimensions are part of the key.
+        (int maxWidth, int) cacheKey = (maxWidth, maxCellHeight ?? -1);
+        if (!_cachedSixels.TryGetValue(cacheKey, out Sixel sixel)) {
             sixel = SixelRender.ImageToSixel(Image, maxWidth, AnimationDisabled, maxCellHeight);
-            _cachedSixels.Add(maxWidth, sixel);
+            _cachedSixels.Add(cacheKey, sixel);
         }
 
         // Draw a transparent renderable to take up the space the sixel is drawn in.

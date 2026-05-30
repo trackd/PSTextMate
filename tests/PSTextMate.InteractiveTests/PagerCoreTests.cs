@@ -343,6 +343,56 @@ public sealed class PagerCoreTests {
         Assert.True(borderKeptOriginalStyle);
     }
 
+    [Fact]
+    public void Slice_ValidRange_ReturnsExpectedLineSubsetAndLineNumbers() {
+        HighlightedText highlighted = new(
+            [new Text("one"), new Text("two"), new Text("three"), new Text("four")],
+            showLineNumbers: true
+        ) {
+            LineNumberStart = 10
+        };
+
+        HighlightedText slice = highlighted.Slice(1, 2);
+        string output = Writer.WriteToString(slice);
+        string[] lines = output.Split(Environment.NewLine, StringSplitOptions.None);
+
+        Assert.Equal(2, slice.LineCount);
+        Assert.Equal(11, slice.LineNumberStart);
+        Assert.Equal(2, slice.Renderables.Length);
+        Assert.Equal(2, lines.Length);
+        Assert.StartsWith("11", lines[0], StringComparison.Ordinal);
+        Assert.StartsWith("12", lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetView_WithSourceLines_SlicesSearchableSourceContent() {
+        HighlightedText highlighted = new(
+            [new Text("ignore 1"), new Text("ignore 2"), new Text("ignore 3")],
+            sourceLines: ["alpha", "beta", "gamma"]
+        );
+
+        HighlightedText slice = highlighted.GetView(1, 1);
+        PagerDocument document = PagerDocument.FromHighlightedText(slice);
+        PagerSearchSession session = new(document);
+
+        session.SetQuery("beta");
+        Assert.Equal(1, session.HitCount);
+
+        session.SetQuery("alpha");
+        Assert.Equal(0, session.HitCount);
+    }
+
+    [Fact]
+    public void SetView_UsingCurrentContent_RestrictsRenderedLineCount() {
+        HighlightedText highlighted = new(
+            [new Text("one"), new Text("two"), new Text("three")]
+        );
+
+        highlighted.SetView(1, 2);
+
+        Assert.Equal(2, highlighted.LineCount);
+    }
+
     private sealed class Osc8Renderable : IRenderable {
         private readonly string _label;
         private readonly string _url;
@@ -427,5 +477,19 @@ public sealed class PagerCoreTests {
         }
 
         public override string ToString() => _text;
+    }
+
+    private sealed class RawEscapeRenderable : IRenderable {
+        private readonly string _payload;
+
+        public RawEscapeRenderable(string payload) {
+            _payload = payload;
+        }
+
+        public Measurement Measure(RenderOptions options, int maxWidth)
+            => new(1, Math.Max(1, maxWidth));
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+            => [new Segment(_payload)];
     }
 }

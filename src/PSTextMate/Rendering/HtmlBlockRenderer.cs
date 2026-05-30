@@ -24,6 +24,7 @@ internal static partial class HtmlBlockRenderer {
             IRenderable[]? htmlRenderables = TextMateProcessor.ProcessLinesCodeBlock([.. htmlLines], themeName, "html", false);
             if (htmlRenderables is not null) {
                 return new Panel(new Rows(htmlRenderables))
+                    .Padding(0, 0)
                     .Border(BoxBorder.Rounded)
                     .Header("html", Justify.Left);
             }
@@ -121,6 +122,7 @@ internal static partial class HtmlBlockRenderer {
         string htmlText = string.Join("\n", htmlLines);
         var text = new Text(htmlText, Style.Plain);
         return new Panel(text)
+            .Padding(0, 0)
             .Border(BoxBorder.Rounded)
             .Header("html", Justify.Left);
     }

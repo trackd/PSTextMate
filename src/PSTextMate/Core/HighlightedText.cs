@@ -59,17 +59,17 @@ public sealed class HighlightedText : IRenderable {
     /// <summary>
     /// Starting line number for the gutter.
     /// </summary>
-    public int LineNumberStart { get; set; } = 1;
+    internal int LineNumberStart { get; set; } = 1;
 
     /// <summary>
     /// Optional fixed width for the line number column.
     /// </summary>
-    public int? LineNumberWidth { get; set; }
+    internal int? LineNumberWidth { get; set; }
 
     /// <summary>
     /// Separator inserted between the line number and content.
     /// </summary>
-    public string GutterSeparator { get; set; } = " │ ";
+    internal string GutterSeparator { get; set; } = " │ ";
 
     /// <summary>
     /// Number of lines contained in this highlighted text.
@@ -97,6 +97,45 @@ public sealed class HighlightedText : IRenderable {
     }
 
     /// <summary>
+    /// Configure this instance to render a view (slice) of its current content.
+    /// </summary>
+    /// <param name="start">Zero-based start index within the current renderable sequence.</param>
+    /// <param name="count">Number of renderables to include in the view.</param>
+    public void SetView(int start, int count)
+        => SetView(GetRenderablesEnumerable(), start, count);
+
+    /// <summary>
+    /// Returns a new highlighted text instance containing a partial view of this instance.
+    /// This is intended for user-facing partial output scenarios and does not modify the source instance.
+    /// </summary>
+    /// <param name="start">Zero-based start index within the current renderable sequence.</param>
+    /// <param name="count">Number of renderables to include in the returned view.</param>
+    /// <returns>A new <see cref="HighlightedText"/> representing the requested slice.</returns>
+    public HighlightedText GetView(int start, int count)
+        => Slice(start, count);
+
+    /// <summary>
+    /// Returns a new highlighted text instance containing a partial view of this instance.
+    /// </summary>
+    /// <param name="start">Zero-based start index within the current rendered line sequence.</param>
+    /// <param name="count">Number of rendered lines to include in the returned slice.</param>
+    /// <returns>A new <see cref="HighlightedText"/> containing the requested slice.</returns>
+    public HighlightedText Slice(int start, int count) {
+        var renderables = GetRenderablesEnumerable().Skip(start).Take(count).ToArray();
+        return new HighlightedText(
+            renderables,
+            showLineNumbers: ShowLineNumbers,
+            language: Language,
+            page: Page,
+            sourceLines: SliceSourceLines(start, count)
+        ) {
+            LineNumberStart = LineNumberStart + start,
+            LineNumberWidth = LineNumberWidth,
+            GutterSeparator = GutterSeparator
+        };
+    }
+
+    /// <summary>
     /// Clears any active view so the instance renders its own <see cref="Renderables"/> array.
     /// </summary>
     public void ClearView() {
@@ -119,6 +158,41 @@ public sealed class HighlightedText : IRenderable {
         for (int i = begin; i < end; i++) {
             yield return source[i];
         }
+    }
+
+    private IReadOnlyList<string>? SliceSourceLines(int begin, int length) {
+        if (SourceLines is null) {
+            return null;
+        }
+
+        int boundedBegin = Math.Clamp(begin, 0, SourceLines.Count);
+        int boundedLength = Math.Clamp(length, 0, SourceLines.Count - boundedBegin);
+        return boundedLength == 0
+            ? []
+            : [.. SourceLines.Skip(boundedBegin).Take(boundedLength)];
+    }
+
+    private int? ResolveSliceLineNumberWidth() {
+        if (!ShowLineNumbers) {
+            return null;
+        }
+
+        if (LineNumberWidth is int explicitWidth && explicitWidth > 0) {
+            return explicitWidth;
+        }
+
+        int totalLines = _documentLineCount > 0
+            ? _documentLineCount
+            : _viewSource is null
+                ? Renderables.Length
+                : _viewCount;
+
+        if (totalLines <= 0) {
+            return null;
+        }
+
+        int lastLineNumber = LineNumberStart + Math.Max(0, totalLines - 1);
+        return lastLineNumber.ToString(CultureInfo.InvariantCulture).Length;
     }
 
     internal void SetSourceLines(IReadOnlyList<string>? sourceLines)

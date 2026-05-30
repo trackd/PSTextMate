@@ -53,10 +53,12 @@ internal sealed class PagerViewportEngine {
 
             if (IsImageRenderable(renderable)) {
                 if (renderable is PixelImage pixelImage) {
-                    // In pager mode, clamp image width to the viewport so frames stay within screen bounds.
+                    // In pager mode, clamp image width and height to the viewport so the sixel
+                    // payload stays within screen bounds and does not overflow content rows.
                     pixelImage.MaxWidth = pixelImage.MaxWidth is int existingWidth && existingWidth > 0
                         ? Math.Min(existingWidth, width)
                         : width;
+                    pixelImage.MaxHeight = Math.Max(1, contentRows / 3);
                 }
 
                 _renderableHeights.Add(EstimateImageHeight(renderable, width, contentRows, options));
@@ -202,9 +204,17 @@ internal sealed class PagerViewportEngine {
             || name.Contains("Image", StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool IsMarkdownSource()
-        => _sourceHighlightedText is not null
-            && _sourceHighlightedText.Language.Contains("markdown", StringComparison.OrdinalIgnoreCase);
+    private bool IsMarkdownSource() {
+        if (_sourceHighlightedText is null) {
+            return false;
+        }
+
+        string language = _sourceHighlightedText.Language;
+        return language.Contains("markdown", StringComparison.OrdinalIgnoreCase)
+            || language.Equals(".md", StringComparison.OrdinalIgnoreCase)
+            || language.Equals(".markdown", StringComparison.OrdinalIgnoreCase)
+            || language.Equals(".mdown", StringComparison.OrdinalIgnoreCase);
+    }
 
     private int GetRenderableContentWidth(int width) {
         int availableWidth = Math.Max(1, width);
@@ -261,7 +271,8 @@ internal sealed class PagerViewportEngine {
                 double imageAspect = (double)imagePixelHeight / imagePixelWidth;
                 double cellAspectRatio = GetTerminalCellAspectRatio();
                 int estimatedRows = (int)Math.Ceiling(imageAspect * Math.Max(1, cellWidth) * cellAspectRatio);
-                return Math.Clamp(Math.Max(1, estimatedRows), 1, contentRows);
+                int maxHeight = pixelImage.MaxHeight ?? contentRows;
+                return Math.Clamp(Math.Max(1, estimatedRows), 1, maxHeight);
             }
         }
 

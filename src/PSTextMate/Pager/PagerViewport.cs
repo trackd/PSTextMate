@@ -5,6 +5,7 @@ internal readonly record struct PagerViewportWindow(int Top, int Count, int EndE
 internal sealed class PagerViewportEngine {
     private readonly IReadOnlyList<IRenderable> _renderables;
     private readonly HighlightedText? _sourceHighlightedText;
+    private bool _containsImages;
     private List<int> _renderableHeights = [];
     private int _lastWidth = -1;
     private int _lastContentRows = -1;
@@ -14,15 +15,24 @@ internal sealed class PagerViewportEngine {
     public PagerViewportEngine(IReadOnlyList<IRenderable> renderables, HighlightedText? sourceHighlightedText) {
         _renderables = renderables ?? throw new ArgumentNullException(nameof(renderables));
         _sourceHighlightedText = sourceHighlightedText;
+        _containsImages = renderables.Any(IsImageRenderable);
+    }
+
+    public void NoteRenderableAppended(IRenderable renderable) {
+        ArgumentNullException.ThrowIfNull(renderable);
+
+        if (IsImageRenderable(renderable)) {
+            _containsImages = true;
+        }
     }
 
     public void RecalculateHeights(int width, int contentRows, int windowHeight, IAnsiConsole console) {
         ArgumentNullException.ThrowIfNull(console);
 
+        bool layoutAffectsMeasurement = _containsImages;
         if (_renderableHeights.Count == _renderables.Count
             && _lastWidth == width
-            && _lastContentRows == contentRows
-            && _lastWindowHeight == windowHeight
+            && (!layoutAffectsMeasurement || (_lastContentRows == contentRows && _lastWindowHeight == windowHeight))
             && _lastRenderableCount == _renderables.Count) {
             return;
         }
@@ -30,7 +40,8 @@ internal sealed class PagerViewportEngine {
         _renderableHeights = new List<int>(_renderables.Count);
         Capabilities capabilities = console.Profile.Capabilities;
         int measurementHeight = windowHeight > 0 ? windowHeight : Math.Max(1, contentRows + 3);
-        var size = new Size(width, measurementHeight);
+        int contentWidth = GetRenderableContentWidth(width);
+        var size = new Size(contentWidth, measurementHeight);
         var options = new RenderOptions(capabilities, size);
 
         for (int i = 0; i < _renderables.Count; i++) {
@@ -42,10 +53,12 @@ internal sealed class PagerViewportEngine {
 
             if (IsImageRenderable(renderable)) {
                 if (renderable is PixelImage pixelImage) {
-                    // In pager mode, clamp image width to the viewport so frames stay within screen bounds.
+                    // In pager mode, clamp image width and height to the viewport so the sixel
+                    // payload stays within screen bounds and does not overflow content rows.
                     pixelImage.MaxWidth = pixelImage.MaxWidth is int existingWidth && existingWidth > 0
                         ? Math.Min(existingWidth, width)
                         : width;
+                    pixelImage.MaxHeight = Math.Max(1, contentRows / 3);
                 }
 
                 _renderableHeights.Add(EstimateImageHeight(renderable, width, contentRows, options));
@@ -53,19 +66,14 @@ internal sealed class PagerViewportEngine {
             }
 
             try {
-                // For non-image renderables, render to segments to get accurate row count.
-                // This avoids overflow/cropping artifacts when wrapped text spans many rows.
-                var segments = renderable.Render(options, width).ToList();
-                int lines = CountLinesSegments(segments);
+                int lines = CountRenderedLines(renderable, options, contentWidth);
                 _renderableHeights.Add(Math.Max(1, lines));
             }
             catch (InvalidOperationException) {
-                // Fallback: assume single-line if measurement fails.
-                _renderableHeights.Add(1);
+                _renderableHeights.Add(EstimateRenderableHeight(renderable, options, contentWidth));
             }
             catch (IOException) {
-                // Fallback: assume single-line if measurement fails.
-                _renderableHeights.Add(1);
+                _renderableHeights.Add(EstimateRenderableHeight(renderable, options, contentWidth));
             }
         }
 
@@ -172,7 +180,13 @@ internal sealed class PagerViewportEngine {
         return Math.Clamp(nextTop, 0, _renderables.Count - 1);
     }
 
+    public int GetRenderableHeightAt(int index)
+        => GetRenderableHeightCore(index);
+
     private int GetRenderableHeight(int index)
+        => GetRenderableHeightCore(index);
+
+    private int GetRenderableHeightCore(int index)
         => index < 0 || index >= _renderableHeights.Count ? 1 : Math.Max(1, _renderableHeights[index]);
 
     private bool IsImageRenderable(IRenderable? renderable) {
@@ -190,17 +204,59 @@ internal sealed class PagerViewportEngine {
             || name.Contains("Image", StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool IsMarkdownSource()
-        => _sourceHighlightedText is not null
-            && _sourceHighlightedText.Language.Contains("markdown", StringComparison.OrdinalIgnoreCase);
+    private bool IsMarkdownSource() {
+        if (_sourceHighlightedText is null) {
+            return false;
+        }
 
-    private static int CountLinesSegments(List<Segment> segments) {
-        if (segments.Count == 0) {
+        string language = _sourceHighlightedText.Language;
+        return language.Contains("markdown", StringComparison.OrdinalIgnoreCase)
+            || language.Equals(".md", StringComparison.OrdinalIgnoreCase)
+            || language.Equals(".markdown", StringComparison.OrdinalIgnoreCase)
+            || language.Equals(".mdown", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private int GetRenderableContentWidth(int width) {
+        int availableWidth = Math.Max(1, width);
+        if (_sourceHighlightedText is null || !_sourceHighlightedText.ShowLineNumbers) {
+            return availableWidth;
+        }
+
+        int lineNumberWidth = ResolveLineNumberWidth();
+        int gutterWidth = lineNumberWidth + _sourceHighlightedText.GutterSeparator.Length;
+        return Math.Max(1, availableWidth - gutterWidth);
+    }
+
+    private int ResolveLineNumberWidth() {
+        if (_sourceHighlightedText is null) {
             return 0;
         }
 
-        int lineBreaks = segments.Count(segment => segment.IsLineBreak);
-        return lineBreaks == 0 ? 1 : segments[^1].IsLineBreak ? lineBreaks : lineBreaks + 1;
+        if (_sourceHighlightedText.LineNumberWidth is int explicitWidth && explicitWidth > 0) {
+            return explicitWidth;
+        }
+
+        int lastLineNumber = _sourceHighlightedText.LineNumberStart + Math.Max(0, _renderables.Count - 1);
+        return lastLineNumber.ToString(CultureInfo.InvariantCulture).Length;
+    }
+
+    private static int CountRenderedLines(IRenderable renderable, RenderOptions options, int width) {
+        List<SegmentLine> lines = Segment.SplitLines(renderable.Render(options, width), Math.Max(1, width));
+        return Math.Max(1, lines.Count);
+    }
+
+    private static int EstimateRenderableHeight(IRenderable renderable, RenderOptions options, int width) {
+        try {
+            Measurement measurement = renderable.Measure(options, width);
+            int measuredWidth = Math.Max(1, measurement.Max);
+            return Math.Max(1, (int)Math.Ceiling((double)measuredWidth / Math.Max(1, width)));
+        }
+        catch (InvalidOperationException) {
+            return 1;
+        }
+        catch (IOException) {
+            return 1;
+        }
     }
 
     private static int EstimateImageHeight(IRenderable renderable, int width, int contentRows, RenderOptions options) {
@@ -215,7 +271,8 @@ internal sealed class PagerViewportEngine {
                 double imageAspect = (double)imagePixelHeight / imagePixelWidth;
                 double cellAspectRatio = GetTerminalCellAspectRatio();
                 int estimatedRows = (int)Math.Ceiling(imageAspect * Math.Max(1, cellWidth) * cellAspectRatio);
-                return Math.Clamp(Math.Max(1, estimatedRows), 1, contentRows);
+                int maxHeight = pixelImage.MaxHeight ?? contentRows;
+                return Math.Clamp(Math.Max(1, estimatedRows), 1, maxHeight);
             }
         }
 

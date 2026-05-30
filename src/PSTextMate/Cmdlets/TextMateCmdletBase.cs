@@ -152,6 +152,7 @@ public abstract class TextMateCmdletBase : PSCmdlet {
 
         (string token, bool asExtension) = ResolveTokenForStringInput();
         IRenderable[]? renderables = TextMateProcessor.ProcessLines(lines, Theme, token, isExtension: asExtension, forceAlternate: UseAlternate);
+        WriteRenderingDiagnostics(token, asExtension, renderables);
 
         return renderables is null
             ? null
@@ -189,6 +190,7 @@ public abstract class TextMateCmdletBase : PSCmdlet {
 
         string[] lines = File.ReadAllLines(filePath.FullName);
         IRenderable[]? renderables = TextMateProcessor.ProcessLines(lines, Theme, token, isExtension: asExtension, forceAlternate: UseAlternate);
+        WriteRenderingDiagnostics(token, asExtension, renderables);
 
         if (renderables is not null) {
             yield return new HighlightedText(
@@ -252,5 +254,49 @@ public abstract class TextMateCmdletBase : PSCmdlet {
                 WriteVerbose($"Set markdown base directory from input: {baseDir}");
             }
         }
+    }
+
+    private void WriteRenderingDiagnostics(string token, bool asExtension, IRenderable[]? renderables) {
+        if (renderables is null) {
+            WriteVerbose("Rendering produced no output renderables.");
+            return;
+        }
+
+        WriteVerbose($"Rendering produced {renderables.Length} renderables.");
+
+        if (!ContainsImageRenderables(renderables)) {
+            return;
+        }
+
+        WriteVerbose("Detected image renderables in output (Sixel/Pixel/Image).");
+
+        if (!IsMarkdownToken(token, asExtension)) {
+            return;
+        }
+
+        WriteDiagnosticIfPresent("Image renderer diagnostic", Rendering.ImageRenderer.GetLastImageError());
+        WriteDiagnosticIfPresent("Sixel diagnostic", Rendering.ImageRenderer.GetLastSixelError());
+    }
+
+    private static bool ContainsImageRenderables(IEnumerable<IRenderable> renderables)
+        => renderables.Any(static r => {
+            string name = r.GetType().Name;
+            return name.Contains("Sixel", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Pixel", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Image", StringComparison.OrdinalIgnoreCase);
+        });
+
+    private void WriteDiagnosticIfPresent(string label, string? value) {
+        if (!string.IsNullOrWhiteSpace(value)) {
+            WriteVerbose($"{label}: {value}");
+        }
+    }
+
+    private static bool IsMarkdownToken(string token, bool asExtension) {
+        return asExtension
+            ? token.Equals(".md", StringComparison.OrdinalIgnoreCase)
+                || token.Equals(".markdown", StringComparison.OrdinalIgnoreCase)
+                || token.Equals(".mdown", StringComparison.OrdinalIgnoreCase)
+            : token.Equals("markdown", StringComparison.OrdinalIgnoreCase);
     }
 }

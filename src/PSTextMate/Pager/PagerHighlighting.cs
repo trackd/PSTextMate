@@ -17,26 +17,6 @@ internal static class PagerHighlighting {
                 .TrimEnd('\n');
     }
 
-    private static List<PagerSearchHit> BuildQueryHits(string plainText, string query) {
-        if (string.IsNullOrEmpty(plainText) || string.IsNullOrEmpty(query)) {
-            return [];
-        }
-
-        var hits = new List<PagerSearchHit>();
-        int searchStart = 0;
-        while (searchStart <= plainText.Length - query.Length) {
-            int hitOffset = plainText.IndexOf(query, searchStart, StringComparison.OrdinalIgnoreCase);
-            if (hitOffset < 0) {
-                break;
-            }
-
-            hits.Add(new PagerSearchHit(0, hitOffset, query.Length, 0, hitOffset));
-            searchStart = hitOffset + Math.Max(1, query.Length);
-        }
-
-        return hits;
-    }
-
     private sealed class SegmentHighlightRenderable : IRenderable {
         private readonly IRenderable _inner;
         private readonly string _query;
@@ -67,32 +47,31 @@ internal static class PagerHighlighting {
                 return source;
             }
 
+            bool highlightLinkedLabels = _highlightLinkedLabelsOnNoDirectMatch && HasSegmentLinkMatch(source, _query);
             string plainText = BuildPlainText(source);
             if (plainText.Length == 0) {
                 return source;
             }
 
-            List<PagerSearchHit> hits = BuildQueryHits(plainText, _query);
-            bool hasDirectHits = hits.Count > 0;
-            bool highlightLinkedLabels = _highlightLinkedLabelsOnNoDirectMatch
-                && !hasDirectHits
-                && source.Any(segment => SegmentLinkMatchesQuery(segment, _query));
+            bool[] matchMask = new bool[plainText.Length];
+            bool[] lineHasMatch = new bool[CountLines(plainText)];
+            bool hasDirectHits = BuildHighlightMasks(plainText, _query, matchMask, lineHasMatch);
 
             if (!hasDirectHits && !highlightLinkedLabels) {
                 return source;
             }
 
-            bool[] matchMask = new bool[plainText.Length];
-            foreach (PagerSearchHit hit in hits) {
-                int start = Math.Clamp(hit.Offset, 0, plainText.Length);
-                int length = Math.Clamp(hit.Length, 0, plainText.Length - start);
-                for (int i = 0; i < length; i++) {
-                    matchMask[start + i] = true;
+            return RebuildSegmentsWithHighlights(source, matchMask, lineHasMatch, highlightLinkedLabels);
+        }
+
+        private static bool HasSegmentLinkMatch(IEnumerable<Segment> segments, string query) {
+            foreach (Segment segment in segments) {
+                if (SegmentLinkMatchesQuery(segment, query)) {
+                    return true;
                 }
             }
 
-            bool[] lineHasMatch = BuildLineMatchMask(plainText, hits);
-            return RebuildSegmentsWithHighlights(source, matchMask, lineHasMatch, highlightLinkedLabels);
+            return false;
         }
 
         private static bool SegmentLinkMatchesQuery(Segment segment, string query) {
@@ -128,38 +107,50 @@ internal static class PagerHighlighting {
             }
         }
 
-        private static bool[] BuildLineMatchMask(string plainText, IReadOnlyList<PagerSearchHit> hits) {
-            var lineStarts = new List<int> { 0 };
-            for (int i = 0; i < plainText.Length; i++) {
-                if (plainText[i] == '\n' && i + 1 < plainText.Length) {
-                    lineStarts.Add(i + 1);
+        private static int CountLines(string plainText) {
+            int lines = 1;
+            foreach (char current in plainText) {
+                if (current == '\n') {
+                    lines++;
                 }
             }
 
-            bool[] lineMatches = new bool[lineStarts.Count == 0 ? 1 : lineStarts.Count];
-            foreach (PagerSearchHit hit in hits) {
-                int line = ResolveLine(lineStarts, hit.Offset);
-                lineMatches[line] = true;
-            }
-
-            return lineMatches;
+            return lines;
         }
 
-        private static int ResolveLine(List<int> lineStarts, int offset) {
-            if (lineStarts.Count == 0) {
-                return 0;
+        private static bool BuildHighlightMasks(string plainText, string query, bool[] matchMask, bool[] lineHasMatch) {
+            if (plainText.Length == 0 || query.Length == 0) {
+                return false;
             }
 
-            int line = 0;
-            for (int i = 1; i < lineStarts.Count; i++) {
-                if (lineStarts[i] > offset) {
+            bool hasHit = false;
+            int searchStart = 0;
+            int currentLine = 0;
+            int nextLineBreak = plainText.IndexOf('\n');
+
+            while (searchStart <= plainText.Length - query.Length) {
+                int hitOffset = plainText.IndexOf(query, searchStart, StringComparison.OrdinalIgnoreCase);
+                if (hitOffset < 0) {
                     break;
                 }
 
-                line = i;
+                while (nextLineBreak >= 0 && nextLineBreak < hitOffset) {
+                    currentLine++;
+                    nextLineBreak = plainText.IndexOf('\n', nextLineBreak + 1);
+                }
+
+                int start = Math.Clamp(hitOffset, 0, plainText.Length);
+                int length = Math.Clamp(query.Length, 0, plainText.Length - start);
+                for (int i = 0; i < length; i++) {
+                    matchMask[start + i] = true;
+                }
+
+                lineHasMatch[Math.Clamp(currentLine, 0, lineHasMatch.Length - 1)] = true;
+                hasHit = true;
+                searchStart = hitOffset + Math.Max(1, query.Length);
             }
 
-            return line;
+            return hasHit;
         }
 
         private List<Segment> RebuildSegmentsWithHighlights(

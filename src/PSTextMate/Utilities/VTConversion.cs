@@ -9,6 +9,8 @@ public static class VTConversion {
     private const char CSI_START = '[';
     private const char OSC_START = ']';
     private const char SGR_END = 'm';
+    private const int DefaultTabWidth = 8;
+    private static readonly string[] TabPadding = ["", " ", "  ", "   ", "    ", "     ", "      ", "       ", "        "];
 
     /// <summary>
     /// Parses a string containing VT escape sequences and returns a Paragraph object.
@@ -27,19 +29,14 @@ public static class VTConversion {
         var currentStyle = new StyleState();
         int textStart = 0;
         int i = 0;
+        int column = 0;
 
         while (i < span.Length) {
             if (span[i] == ESC && i + 1 < span.Length) {
                 if (span[i + 1] == CSI_START) {
                     // Append text segment before escape sequence
                     if (i > textStart) {
-                        string text = input[textStart..i];
-                        if (currentStyle.HasAnyStyle) {
-                            paragraph.Append(text, currentStyle.ToSpectreStyle());
-                        }
-                        else {
-                            paragraph.Append(text, Style.Plain);
-                        }
+                        AppendText(paragraph, span[textStart..i], currentStyle, ref column);
                     }
 
                     // Parse CSI escape sequence
@@ -55,13 +52,7 @@ public static class VTConversion {
                 else if (span[i + 1] == OSC_START) {
                     // Append text segment before OSC sequence
                     if (i > textStart) {
-                        string text = input[textStart..i];
-                        if (currentStyle.HasAnyStyle) {
-                            paragraph.Append(text, currentStyle.ToSpectreStyle());
-                        }
-                        else {
-                            paragraph.Append(text, Style.Plain);
-                        }
+                        AppendText(paragraph, span[textStart..i], currentStyle, ref column);
                     }
 
                     // Parse OSC sequence
@@ -69,12 +60,7 @@ public static class VTConversion {
                     if (oscResult.End > i) {
                         // If we found hyperlink text, add it as a segment
                         if (!string.IsNullOrEmpty(oscResult.LinkText)) {
-                            if (currentStyle.HasAnyStyle) {
-                                paragraph.Append(oscResult.LinkText, currentStyle.ToSpectreStyle());
-                            }
-                            else {
-                                paragraph.Append(oscResult.LinkText, Style.Plain);
-                            }
+                            AppendText(paragraph, oscResult.LinkText.AsSpan(), currentStyle, ref column);
                         }
                         i = oscResult.End;
                         textStart = i;
@@ -94,16 +80,62 @@ public static class VTConversion {
 
         // Append remaining text
         if (textStart < span.Length) {
-            string text = input[textStart..];
-            if (currentStyle.HasAnyStyle) {
-                paragraph.Append(text, currentStyle.ToSpectreStyle());
-            }
-            else {
-                paragraph.Append(text, Style.Plain);
-            }
+            AppendText(paragraph, span[textStart..], currentStyle, ref column);
         }
 
         return paragraph;
+    }
+
+    private static void AppendText(Paragraph paragraph, ReadOnlySpan<char> text, StyleState styleState, ref int column) {
+        if (text.IsEmpty) {
+            return;
+        }
+
+        Style style = styleState.HasAnyStyle ? styleState.ToSpectreStyle() : Style.Plain;
+        int start = 0;
+
+        while (start < text.Length) {
+            int tabOffset = text[start..].IndexOf('\t');
+            if (tabOffset < 0) {
+                AppendRun(paragraph, text[start..], style);
+                AdvanceColumn(text[start..], ref column);
+                return;
+            }
+
+            int tabIndex = start + tabOffset;
+            if (tabIndex > start) {
+                ReadOnlySpan<char> run = text[start..tabIndex];
+                AppendRun(paragraph, run, style);
+                AdvanceColumn(run, ref column);
+            }
+
+            int spaces = GetTabPaddingWidth(column);
+            paragraph.Append(TabPadding[spaces], style);
+            column += spaces;
+            start = tabIndex + 1;
+        }
+    }
+
+    private static void AppendRun(Paragraph paragraph, ReadOnlySpan<char> text, Style style) {
+        if (!text.IsEmpty) {
+            paragraph.Append(text.ToString(), style);
+        }
+    }
+
+    private static void AdvanceColumn(ReadOnlySpan<char> text, ref int column) {
+        foreach (char current in text) {
+            if (current == '\n') {
+                column = 0;
+            }
+            else if (current != '\r') {
+                column++;
+            }
+        }
+    }
+
+    private static int GetTabPaddingWidth(int column) {
+        int spaces = DefaultTabWidth - (column % DefaultTabWidth);
+        return spaces == 0 ? DefaultTabWidth : spaces;
     }
 
     /// <summary>
@@ -112,7 +144,8 @@ public static class VTConversion {
     /// Returns the index after the escape sequence.
     /// </summary>
     private static int ParseEscapeSequence(ReadOnlySpan<char> span, int start, ref StyleState style) {
-        int i = start + 2; // Skip ESC[
+        // Skip ESC[
+        int i = start + 2;
         const int MaxEscapeSequenceLength = 1024;
 
         // Stack-allocate parameter array (SGR sequences typically have < 16 parameters)
@@ -125,10 +158,10 @@ public static class VTConversion {
         // Parse parameters (numbers separated by semicolons or colons)
         while (i < span.Length && span[i] != SGR_END && escapeLength < MaxEscapeSequenceLength) {
             if (IsDigit(span[i])) {
-                // Overflow-safe parsing per XenoAtom pattern
                 int digit = span[i] - '0';
                 if (currentNumber > (int.MaxValue - digit) / 10) {
-                    currentNumber = int.MaxValue;  // Clamp instead of overflow
+                    // Clamp instead of overflow
+                    currentNumber = int.MaxValue;
                 }
                 else {
                     currentNumber = (currentNumber * 10) + digit;
@@ -187,7 +220,8 @@ public static class VTConversion {
 
         // Check if this is OSC 8 (hyperlink)
         if (i < span.Length && span[i] == '8' && i + 1 < span.Length && span[i + 1] == ';') {
-            i += 2; // Skip "8;"
+            // Skip "8;"
+            i += 2;
 
             // Parse hyperlink sequence: ESC]8;params;url ESC\text ESC]8;; ESC\
             int urlEnd = -1;
@@ -199,7 +233,8 @@ public static class VTConversion {
             }
 
             if (i < span.Length && span[i] == ';') {
-                i++; // Skip the semicolon
+                // Skip the semicolon
+                i++;
                 oscLength++;
                 int urlStart = i;
 
@@ -215,7 +250,8 @@ public static class VTConversion {
 
                 if (urlEnd > urlStart && urlEnd - urlStart < MaxOscLength) {
                     string url = span[urlStart..urlEnd].ToString();
-                    i = urlEnd + 2; // Skip ESC\
+                    // Skip ESC\
+                    i = urlEnd + 2;
 
                     // Check if this is a link start (has URL) or link end (empty)
                     if (!string.IsNullOrEmpty(url)) {

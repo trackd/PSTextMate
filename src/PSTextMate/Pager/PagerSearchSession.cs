@@ -13,6 +13,7 @@ internal sealed class PagerSearchSession {
     private readonly List<PagerSearchHit> _hits = [];
     private readonly Dictionary<int, List<PagerSearchHit>> _hitsByRenderable = [];
     private static readonly IReadOnlyList<PagerSearchHit> s_noHits = [];
+    private int _indexedEntryCount;
     public string Query { get; private set; } = string.Empty;
     public int CurrentHitIndex { get; private set; } = -1;
     public int HitCount => _hits.Count;
@@ -42,7 +43,7 @@ internal sealed class PagerSearchSession {
             return _hits[CurrentHitIndex];
         }
 
-        int nearest = _hits.FindIndex(hit => hit.RenderableIndex >= topIndex);
+        int nearest = FindFirstHitAtOrAfter(topIndex);
         CurrentHitIndex = nearest >= 0 ? nearest : 0;
         return _hits[CurrentHitIndex];
     }
@@ -58,7 +59,7 @@ internal sealed class PagerSearchSession {
             return _hits[CurrentHitIndex];
         }
 
-        int nearest = _hits.FindLastIndex(hit => hit.RenderableIndex <= topIndex);
+        int nearest = FindLastHitAtOrBefore(topIndex);
         CurrentHitIndex = nearest >= 0 ? nearest : _hits.Count - 1;
         return _hits[CurrentHitIndex];
     }
@@ -69,42 +70,99 @@ internal sealed class PagerSearchSession {
             : s_noHits;
     }
 
+    public bool HasHitsForRenderable(int renderableIndex)
+        => _hitsByRenderable.ContainsKey(renderableIndex);
+
+    public void AppendPendingEntries() {
+        if (!HasQuery) {
+            _indexedEntryCount = _document.Entries.Count;
+            return;
+        }
+
+        IndexEntries(_indexedEntryCount);
+    }
+
     private void RebuildHits() {
         _hits.Clear();
         _hitsByRenderable.Clear();
         CurrentHitIndex = -1;
+        _indexedEntryCount = 0;
 
         if (!HasQuery) {
+            _indexedEntryCount = _document.Entries.Count;
             return;
         }
 
-        foreach (PagerDocumentEntry entry in _document.Entries) {
-            if (entry.IsImage || string.IsNullOrEmpty(entry.SearchText)) {
-                continue;
+        IndexEntries(0);
+    }
+
+    private void IndexEntries(int startEntryIndex) {
+        for (int entryIndex = startEntryIndex; entryIndex < _document.Entries.Count; entryIndex++) {
+            AddHitsForEntry(_document.Entries[entryIndex]);
+        }
+
+        _indexedEntryCount = _document.Entries.Count;
+    }
+
+    private void AddHitsForEntry(PagerDocumentEntry entry) {
+        if (entry.IsImage || string.IsNullOrEmpty(entry.SearchText)) {
+            return;
+        }
+
+        int searchStart = 0;
+        while (searchStart <= entry.SearchText.Length - Query.Length) {
+            int hitOffset = entry.SearchText.IndexOf(Query, searchStart, StringComparison.OrdinalIgnoreCase);
+            if (hitOffset < 0) {
+                break;
             }
 
-            int searchStart = 0;
-            while (searchStart <= entry.SearchText.Length - Query.Length) {
-                int hitOffset = entry.SearchText.IndexOf(Query, searchStart, StringComparison.OrdinalIgnoreCase);
-                if (hitOffset < 0) {
-                    break;
-                }
+            (int line, int column) = ResolveLineColumn(entry.LineStarts, hitOffset);
+            var hit = new PagerSearchHit(entry.RenderableIndex, hitOffset, Query.Length, line, column);
+            _hits.Add(hit);
 
-                (int line, int column) = ResolveLineColumn(entry.LineStarts, hitOffset);
-                var hit = new PagerSearchHit(entry.RenderableIndex, hitOffset, Query.Length, line, column);
-                _hits.Add(hit);
+            if (!_hitsByRenderable.TryGetValue(entry.RenderableIndex, out List<PagerSearchHit>? existing)) {
+                _hitsByRenderable[entry.RenderableIndex] = [hit];
+            }
+            else {
+                existing.Add(hit);
+            }
 
-                if (!_hitsByRenderable.TryGetValue(entry.RenderableIndex, out List<PagerSearchHit>? existing)) {
-                    _hitsByRenderable[entry.RenderableIndex] = [hit];
-                }
-                else {
-                    existing.Add(hit);
-                }
+            searchStart = hitOffset + Math.Max(1, Query.Length);
+        }
+    }
 
-                searchStart = hitOffset + Math.Max(1, Query.Length);
+    private int FindFirstHitAtOrAfter(int topIndex) {
+        int low = 0;
+        int high = _hits.Count;
+
+        while (low < high) {
+            int mid = low + ((high - low) / 2);
+            if (_hits[mid].RenderableIndex < topIndex) {
+                low = mid + 1;
+            }
+            else {
+                high = mid;
             }
         }
 
+        return low < _hits.Count ? low : -1;
+    }
+
+    private int FindLastHitAtOrBefore(int topIndex) {
+        int low = 0;
+        int high = _hits.Count;
+
+        while (low < high) {
+            int mid = low + ((high - low) / 2);
+            if (_hits[mid].RenderableIndex <= topIndex) {
+                low = mid + 1;
+            }
+            else {
+                high = mid;
+            }
+        }
+
+        return low > 0 ? low - 1 : -1;
     }
 
     private static (int line, int column) ResolveLineColumn(int[] lineStarts, int offset) {

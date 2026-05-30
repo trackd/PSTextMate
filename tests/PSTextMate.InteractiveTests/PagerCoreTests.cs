@@ -3,6 +3,7 @@ using PSTextMate.Terminal;
 using PSTextMate.Utilities;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using Spectre.Console.Testing;
 using Xunit;
 
 namespace PSTextMate.InteractiveTests;
@@ -106,6 +107,19 @@ public sealed class PagerCoreTests {
     }
 
     [Fact]
+    public void SetQuery_FromProvidedSourceLines_DoesNotRenderRenderable() {
+        var renderable = new CountingRenderable("ignored render text");
+
+        PagerDocument document = new([renderable], sourceLines: ["search target"]);
+        PagerSearchSession session = new(document);
+
+        session.SetQuery("target");
+
+        Assert.Equal(0, renderable.RenderCallCount);
+        Assert.Equal(1, session.HitCount);
+    }
+
+    [Fact]
     public void SetQuery_RenderableWithEmptyWriterOutput_DoesNotMatch() {
         PagerDocument document = new([
             new EmptyRenderable("delta epsilon")
@@ -134,6 +148,37 @@ public sealed class PagerCoreTests {
     }
 
     [Fact]
+    public void Append_WithSourceLine_AddsSearchableEntry() {
+        PagerDocument document = new([]);
+
+        document.Append(new CountingRenderable("ignored render text"), "stream target");
+
+        Assert.Single(document.Renderables);
+
+        PagerSearchSession session = new(document);
+        session.SetQuery("target");
+
+        Assert.Equal(1, session.HitCount);
+    }
+
+    [Fact]
+    public void AppendPendingEntries_WithActiveQuery_IndexesAppendedEntries() {
+        PagerDocument document = new([
+            new Text("alpha")
+        ]);
+        PagerSearchSession session = new(document);
+
+        session.SetQuery("beta");
+        Assert.Equal(0, session.HitCount);
+
+        document.Append(new Text("beta gamma"), sourceLine: null);
+        session.AppendPendingEntries();
+
+        Assert.Equal(1, session.HitCount);
+        Assert.True(session.HasHitsForRenderable(1));
+    }
+
+    [Fact]
     public void RecalculateHeights_SameLayout_DoesNotRecomputeRenderHeights() {
         var first = new CountingRenderable("alpha");
         var second = new CountingRenderable("beta");
@@ -153,6 +198,62 @@ public sealed class PagerCoreTests {
         int thirdPassRenders = first.RenderCallCount + second.RenderCallCount;
 
         Assert.True(thirdPassRenders > secondPassRenders);
+    }
+
+    [Fact]
+    public void RecalculateHeights_DifferentViewportWithoutImages_DoesNotRecomputeRenderHeights() {
+        var first = new CountingRenderable("alpha");
+        var second = new CountingRenderable("beta");
+        IReadOnlyList<IRenderable> renderables = [first, second];
+
+        PagerViewportEngine engine = new(renderables, sourceHighlightedText: null);
+
+        engine.RecalculateHeights(width: 80, contentRows: 20, windowHeight: 40, AnsiConsole.Console);
+        int firstPassRenders = first.RenderCallCount + second.RenderCallCount;
+
+        engine.RecalculateHeights(width: 80, contentRows: 17, windowHeight: 37, AnsiConsole.Console);
+        int secondPassRenders = first.RenderCallCount + second.RenderCallCount;
+
+        Assert.Equal(firstPassRenders, secondPassRenders);
+    }
+
+    [Fact]
+    public void RecalculateHeights_WrappedParagraphs_ReserveWrappedRows() {
+        string vtLine = "\u001b[36m" + new string('x', 60) + "\u001b[0m";
+        IRenderable[] renderables = [
+            VTConversion.ToParagraph(vtLine),
+            VTConversion.ToParagraph(vtLine),
+            VTConversion.ToParagraph(vtLine)
+        ];
+
+        PagerViewportEngine engine = new(renderables, sourceHighlightedText: null);
+
+        engine.RecalculateHeights(width: 20, contentRows: 4, windowHeight: 24, AnsiConsole.Console);
+        PagerViewportWindow viewport = engine.BuildViewport(proposedTop: 0, contentRows: 4);
+
+        Assert.Contains(Environment.NewLine, Writer.WriteToString(renderables[0], width: 20), StringComparison.Ordinal);
+        Assert.Equal(1, viewport.Count);
+        Assert.Equal(1, viewport.EndExclusive);
+    }
+
+    [Fact]
+    public void RecalculateHeights_LineNumbersReduceContentWidth() {
+        IRenderable[] renderables = [
+            new Text(new string('x', 18)),
+            new Text(new string('y', 18)),
+            new Text(new string('z', 18))
+        ];
+        HighlightedText highlighted = new(renderables, showLineNumbers: true) {
+            LineNumberStart = 1
+        };
+
+        PagerViewportEngine engine = new(renderables, highlighted);
+
+        engine.RecalculateHeights(width: 20, contentRows: 4, windowHeight: 24, AnsiConsole.Console);
+        PagerViewportWindow viewport = engine.BuildViewport(proposedTop: 0, contentRows: 4);
+
+        Assert.Equal(2, viewport.Count);
+        Assert.Equal(2, viewport.EndExclusive);
     }
 
     [Fact]
@@ -242,6 +343,56 @@ public sealed class PagerCoreTests {
         Assert.True(borderKeptOriginalStyle);
     }
 
+    [Fact]
+    public void Slice_ValidRange_ReturnsExpectedLineSubsetAndLineNumbers() {
+        HighlightedText highlighted = new(
+            [new Text("one"), new Text("two"), new Text("three"), new Text("four")],
+            showLineNumbers: true
+        ) {
+            LineNumberStart = 10
+        };
+
+        HighlightedText slice = highlighted.Slice(1, 2);
+        string output = Writer.WriteToString(slice);
+        string[] lines = output.Split(Environment.NewLine, StringSplitOptions.None);
+
+        Assert.Equal(2, slice.LineCount);
+        Assert.Equal(11, slice.LineNumberStart);
+        Assert.Equal(2, slice.Renderables.Length);
+        Assert.Equal(2, lines.Length);
+        Assert.StartsWith("11", lines[0], StringComparison.Ordinal);
+        Assert.StartsWith("12", lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetView_WithSourceLines_SlicesSearchableSourceContent() {
+        HighlightedText highlighted = new(
+            [new Text("ignore 1"), new Text("ignore 2"), new Text("ignore 3")],
+            sourceLines: ["alpha", "beta", "gamma"]
+        );
+
+        HighlightedText slice = highlighted.GetView(1, 1);
+        PagerDocument document = PagerDocument.FromHighlightedText(slice);
+        PagerSearchSession session = new(document);
+
+        session.SetQuery("beta");
+        Assert.Equal(1, session.HitCount);
+
+        session.SetQuery("alpha");
+        Assert.Equal(0, session.HitCount);
+    }
+
+    [Fact]
+    public void SetView_UsingCurrentContent_RestrictsRenderedLineCount() {
+        HighlightedText highlighted = new(
+            [new Text("one"), new Text("two"), new Text("three")]
+        );
+
+        highlighted.SetView(1, 2);
+
+        Assert.Equal(2, highlighted.LineCount);
+    }
+
     private sealed class Osc8Renderable : IRenderable {
         private readonly string _label;
         private readonly string _url;
@@ -261,6 +412,21 @@ public sealed class PagerCoreTests {
             string osc8 = $"{esc}]8;;{_url}{esc}\\{_label}{esc}]8;;{esc}\\";
             return [new Segment(osc8, Style.Plain)];
         }
+    }
+
+    private static int CountOccurrences(string value, string needle) {
+        if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(needle)) {
+            return 0;
+        }
+
+        int count = 0;
+        int index = 0;
+        while ((index = value.IndexOf(needle, index, StringComparison.Ordinal)) >= 0) {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
     }
 
     private sealed class ThrowingRenderable : IRenderable {
@@ -311,5 +477,19 @@ public sealed class PagerCoreTests {
         }
 
         public override string ToString() => _text;
+    }
+
+    private sealed class RawEscapeRenderable : IRenderable {
+        private readonly string _payload;
+
+        public RawEscapeRenderable(string payload) {
+            _payload = payload;
+        }
+
+        public Measurement Measure(RenderOptions options, int maxWidth)
+            => new(1, Math.Max(1, maxWidth));
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+            => [new Segment(_payload)];
     }
 }

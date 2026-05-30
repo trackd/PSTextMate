@@ -24,6 +24,7 @@ internal static class CodeBlockRenderer {
                 IRenderable[]? renderables = TextMateProcessor.ProcessLinesCodeBlock(codeLines, themeName, language, false);
                 if (renderables is not null) {
                     return new Panel(new Rows(renderables))
+                        .Padding(0, 0)
                         .Border(BoxBorder.Rounded)
                         .Header(language, Justify.Left);
                 }
@@ -213,6 +214,7 @@ internal static class CodeBlockRenderer {
         string headerText = !string.IsNullOrEmpty(language) ? language : "code";
 
         return new Panel(codeContent)
+            .Padding(0, 0)
             .Border(BoxBorder.Rounded)
             .Header(headerText, Justify.Left);
     }

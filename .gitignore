@@ -10,7 +10,12 @@ debug.md
 .github/chatmodes/*
 .github/instructions/*
 .github/prompts/*
+.github/skills/*
+.github/agents/*
 ref/**
 Copilot-Processing.md
 tools/**
 src/Utilities/TMConsole.cs
+templib/**
+todo.md
+sixlabors.lic

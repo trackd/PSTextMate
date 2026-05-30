@@ -5,6 +5,7 @@ namespace PSTextMate.Core;
 /// Handles theme property extraction and token rendering with performance optimizations.
 /// </summary>
 internal static class TokenProcessor {
+    private const int TabWidth = 4;
     private static readonly ConcurrentDictionary<(string scopesKey, int themeHash), (int fg, int bg, FontStyle fs)> _themePropertyCache = new();
     // Cache Style results per (scopesKey, themeInstanceHash)
     private static readonly ConcurrentDictionary<(string scopesKey, int themeHash), Style?> _styleCache = new();
@@ -152,7 +153,7 @@ internal static class TokenProcessor {
             int endIndex = Math.Min(token.EndIndex, line.Length);
             if (startIndex >= endIndex) continue;
 
-            string text = line[startIndex..endIndex];
+            string text = NormalizeTabsForRendering(line.AsSpan(startIndex, endIndex - startIndex));
             Style? style = GetStyleForScopes(token.Scopes, theme);
 
             // Paragraph.Append does not interpret Spectre markup, so no escaping is necessary.
@@ -163,6 +164,26 @@ internal static class TokenProcessor {
                 paragraph.Append(text, Style.Plain);
             }
         }
+    }
+
+    internal static string NormalizeTabsForRendering(ReadOnlySpan<char> text) {
+        int tabIndex = text.IndexOf('\t');
+        if (tabIndex < 0) {
+            return text.ToString();
+        }
+
+        var builder = new StringBuilder(text.Length + 8);
+        for (int i = 0; i < text.Length; i++) {
+            char c = text[i];
+            if (c == '\t') {
+                builder.Append(' ', TabWidth);
+            }
+            else {
+                builder.Append(c);
+            }
+        }
+
+        return builder.ToString();
     }
     /// <summary>
     /// Returns a cached Style for the given scopes and theme. Returns null for default/no-style.

@@ -41,6 +41,10 @@ public class LoadContext : AssemblyLoadContext {
                 continue;
             }
 
+            if (!IsCompatibleVersion(loadedAssembly.GetName(), assemblyName)) {
+                continue;
+            }
+
             AssemblyLoadContext? loadContext = GetLoadContext(loadedAssembly);
             if (ReferenceEquals(loadContext, Default)) {
                 return loadedAssembly;
@@ -49,6 +53,16 @@ public class LoadContext : AssemblyLoadContext {
 
         string asmPath = Path.Join(_assemblyDir, $"{assemblyName.Name}.dll");
         return File.Exists(asmPath) ? LoadFromAssemblyPath(asmPath) : null;
+    }
+
+    private static bool IsCompatibleVersion(AssemblyName loadedAssemblyName, AssemblyName requestedAssemblyName) {
+        Version? requestedVersion = requestedAssemblyName.Version;
+        if (requestedVersion is null) {
+            return true;
+        }
+
+        Version? loadedVersion = loadedAssemblyName.Version;
+        return loadedVersion is not null && loadedVersion >= requestedVersion;
     }
 
     protected override nint LoadUnmanagedDll(string unmanagedDllName) {

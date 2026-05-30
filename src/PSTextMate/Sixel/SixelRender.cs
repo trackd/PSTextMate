@@ -110,7 +110,7 @@ internal static class SixelRender {
             });
 
             // Sixel supports 256 colors max
-            ctx.Quantize(new OctreeQuantizer(new() {
+            ctx.Quantize(new HexadecatreeQuantizer(new() {
                 MaxColors = 256,
             }));
         });

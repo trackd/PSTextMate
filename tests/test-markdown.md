@@ -82,7 +82,7 @@ public static bool IsSupportedFile(string file) {
 
 ## Images
 
-![xkcd git](../assets/git_commit.png)
+![demo](../assets/logo.png)
 
 ## Horizontal Rule
 

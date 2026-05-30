@@ -50,7 +50,11 @@ public static class Writer {
             return null;
         }
 
-        return WriteToString(highlightedText);
+        // Formatting-table output in ConsoleHost can visually wrap when a rendered
+        // line lands exactly on the last column. Keep one safety column when
+        // invoked from the format view path.
+        int? targetWidth = fromFormat ? Math.Max(1, GetConsoleWidth() - 1) : null;
+        return WriteToString(highlightedText, targetWidth);
     }
 
     /// <summary>
@@ -112,7 +116,7 @@ public static class Writer {
         return Math.Max(1, width);
     }
 
-    private static int GetConsoleWidth() {
+    internal static int GetConsoleWidth() {
         try {
             return Console.WindowWidth > 0 ? Console.WindowWidth : 80;
         }
